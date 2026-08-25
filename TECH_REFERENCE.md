@@ -1010,6 +1010,50 @@ Bean Validation(JSR-380) 어노테이션, 커스텀 Validator, BindingResult 직
 | `NumberExpression` | sum, avg, multiply, divide 등 숫자 연산 |
 | `StringExpression` | concat, lower, trim, substring 등 문자열 연산 |
 
+### SubQuery 예시 (JPAExpressions)
+
+```java
+// [1] WHERE절 — 평균 금액 이상 주문 조회
+queryFactory.selectFrom(order)
+    .where(order.totalAmount.goe(
+        JPAExpressions
+            .select(order.totalAmount.avg())
+            .from(order)
+    )).fetch();
+
+// [2] WHERE절 — IN (활성 사용자의 주문만)
+queryFactory.selectFrom(order)
+    .where(order.user.id.in(
+        JPAExpressions
+            .select(user.id)
+            .from(user)
+            .where(user.status.eq(UserStatus.ACTIVE))
+    )).fetch();
+
+// [3] WHERE절 — EXISTS (주문이 있는 사용자)
+queryFactory.selectFrom(user)
+    .where(JPAExpressions
+        .selectOne()
+        .from(order)
+        .where(order.user.id.eq(user.id))
+        .exists()
+    ).fetch();
+
+// [4] SELECT절 — 스칼라 서브쿼리 (사용자별 주문 수)
+queryFactory.select(
+        user.name,
+        ExpressionUtils.as(
+            JPAExpressions
+                .select(order.count())
+                .from(order)
+                .where(order.user.id.eq(user.id)),
+            "orderCount"
+        )
+    ).from(user).fetch();
+```
+
+> FROM절 서브쿼리는 JPA 표준에서 미지원 → Native Query로 대체
+
 ### Page vs Slice
 
 | 타입 | COUNT 쿼리 | 용도 |
