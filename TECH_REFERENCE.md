@@ -894,6 +894,9 @@ ResponseEntity를 활용한 HTTP 응답 제어, 페이징 처리, 표준 응답 
 | `ResponseEntity.noContent()` | 204 No Content (DELETE) |
 | `ApiResponse<T>` | 통일된 응답 래퍼 (data / error) |
 | `Page<T>` vs `Slice<T>` | COUNT 쿼리 포함 여부 차이 |
+| 오프셋 기반 페이징 | `OFFSET + LIMIT` — 페이지 번호 탐색, 뒤쪽 페이지 느림 |
+| 커서 기반 페이징 | `WHERE id < :cursor LIMIT n` — 성능 일정, 무한 스크롤에 적합 |
+| `CursorPageResponse<T>` | 커서 기반 응답 DTO (content, nextCursor, hasNext) |
 
 ---
 
@@ -989,8 +992,23 @@ Bean Validation(JSR-380) 어노테이션, 커스텀 Validator, BindingResult 직
 |------|------|
 | 메서드 이름 기반 | `findByEmailAndStatus()` → 자동 쿼리 |
 | `@Query` (JPQL) | 엔티티 기반, DB 독립적 |
-| `@Query` (Native) | SQL 직접 사용 |
+| `@Query` (Native) | SQL 직접 사용 (`nativeQuery = true`) |
 | QueryDSL | 타입 안전 동적 쿼리 (컴파일 타임 체크) |
+
+### QueryDSL 상세
+
+| 기능 | 설명 |
+|------|------|
+| `JPAQueryFactory` | selectFrom, select, update, delete + fetch/fetchOne/fetchFirst |
+| `BooleanExpression` | null 반환 시 조건 무시 패턴 (동적 WHERE 조립) |
+| `BooleanBuilder` | 조건을 순차적으로 and/or 추가 |
+| `Projections` | constructor / bean / fields — DTO 직접 조회 |
+| `JPAExpressions` (서브쿼리) | WHERE절 (avg, IN, EXISTS), SELECT절 (스칼라 서브쿼리) |
+| `ExpressionUtils` | 서브쿼리 별칭(`as`), `allOf`/`anyOf` 조건 조합 |
+| `Expressions` | 상수(`constant`), `stringTemplate` (DB 함수 호출) |
+| `CaseBuilder` | CASE WHEN ... THEN ... ELSE ... END |
+| `NumberExpression` | sum, avg, multiply, divide 등 숫자 연산 |
+| `StringExpression` | concat, lower, trim, substring 등 문자열 연산 |
 
 ### Page vs Slice
 
