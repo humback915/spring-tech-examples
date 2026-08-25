@@ -1,0 +1,96 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: spring-tech-examples
+
+  datasource:
+    url: jdbc:h2:mem:testdb
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  h2:
+    console:
+      enabled: true
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+    # ── Hibernate 고유 속성 ──
+    # spring.jpa.hibernate.* 는 ddl-auto, naming 등 Spring Boot 전용 속성만 인식
+    # Hibernate 고유 속성(batch_size 등)은 반드시 spring.jpa.properties.hibernate.* 에 설정
+    # 잘못된 경로에 넣으면 설정이 무시됨 (에러 없이 기본값 사용)
+    properties:
+      hibernate:
+        # ── Hibernate 배치 설정 ──
+        jdbc:
+          # Hibernate가 INSERT/UPDATE를 JDBC 배치로 묶어 실행
+          # 개별 SQL을 하나씩 보내는 대신 N개를 한 번에 전송 → DB 라운드트립 감소
+          # 권장값: 50~500 (너무 크면 메모리 사용 증가)
+          batch_size: 100
+          # @Version 엔티티의 UPDATE도 배치 가능하게 설정
+          # false면 @Version 엔티티는 개별 UPDATE 실행 (배치 비효율)
+          batch_versioned_data: true
+        # 같은 테이블의 INSERT를 연속 배치로 묶음
+        # false면 A-INSERT, B-INSERT, A-INSERT 순서 시 배치가 깨짐
+        order_inserts: true
+        # 같은 테이블의 UPDATE를 연속 배치로 묶음
+        order_updates: true
+
+  # ── Spring Batch 설정 ──
+  batch:
+    # 앱 시작 시 배치 Job 자동 실행 여부
+    # true: 앱 기동과 동시에 등록된 모든 Job 실행 (개발/테스트용)
+    # false: 수동 트리거 또는 스케줄러에서 실행 (운영 환경 권장)
+    job:
+      enabled: false
+    jdbc:
+      # Spring Batch 메타데이터 테이블 자동 생성
+      # ALWAYS: 항상 생성 (개발용, H2 등 인메모리 DB)
+      # NEVER: 생성 안 함 (운영 - Flyway/Liquibase로 관리)
+      # EMBEDDED: 임베디드 DB일 때만 자동 생성
+      initialize-schema: always
+      # 메타데이터 테이블 접두사 (여러 배치 앱이 같은 DB 사용 시 분리)
+      # 기본값: BATCH_
+      table-prefix: BATCH_
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      timeout: 2000
+      connect-timeout: 2000
+      lettuce:
+        pool:
+          max-active: 10
+          max-idle: 10
+          min-idle: 2
+          max-wait: 1000
+
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: example-group
+      auto-offset-reset: earliest
+      max-poll-records: 10
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    producer:
+      acks: all
+      retries: 3
+      compression-type: lz4
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      properties:
+        enable.idempotence: true
+        max.in.flight.requests.per.connection: 5
+    listener:
+      concurrency: 1
+
+# Custom
+executor:
+  refund:
+    core-pool-size: 10
+    max-pool-size: 15
+    queue-capacity: 200

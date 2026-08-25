@@ -1,0 +1,106 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '3.3.11'
+    id 'io.spring.dependency-management' version '1.1.7'
+}
+
+group = 'kr.co.example'
+version = '1.0.0'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+configurations {
+    compileOnly {
+        extendsFrom annotationProcessor
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+// ── Spring Cloud BOM (OpenFeign 등 Spring Cloud 모듈 버전 관리) ──
+// Spring Boot 3.3.x ↔ Spring Cloud 2023.0.x 호환
+dependencyManagement {
+    imports {
+        mavenBom "org.springframework.cloud:spring-cloud-dependencies:2023.0.5"
+    }
+}
+
+dependencies {
+    // === Spring Boot Starters ===
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-webflux'
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-websocket'
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+
+    // === Kafka ===
+    implementation 'org.springframework.kafka:spring-kafka'
+
+    // === Spring Batch ===
+    implementation 'org.springframework.boot:spring-boot-starter-batch'
+
+    // === Caffeine (로컬 캐시) ===
+    implementation 'com.github.ben-manes.caffeine:caffeine'
+
+    // === Redisson (분산 락) ===
+    // Spring Boot 3.3.x → Spring Data Redis 3.3 → redisson-spring-data-33 필요
+    implementation 'org.redisson:redisson-spring-boot-starter:3.35.0'
+
+    // === Micrometer (Prometheus) ===
+    implementation 'io.micrometer:micrometer-registry-prometheus'
+
+    // === DB ===
+    runtimeOnly 'com.h2database:h2'
+    runtimeOnly 'com.mysql:mysql-connector-j'
+
+    // === Validation (Bean Validation — @Valid, @NotNull, @Size 등) ===
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+
+    // === Swagger / OpenAPI 3.0 (API 문서 자동화) ===
+    // Spring Boot 3.x → springdoc-openapi 2.x 사용 (1.x는 Boot 2 전용)
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.6.0'
+
+    // === Spring Cloud OpenFeign (선언적 HTTP 클라이언트, MSA 서비스 간 통신) ===
+    implementation 'org.springframework.cloud:spring-cloud-starter-openfeign'
+
+    // === QueryDSL (타입 안전 동적 쿼리 빌더) ===
+    // jakarta classifier 필수 — Spring Boot 3.x는 Jakarta EE 사용
+    implementation 'com.querydsl:querydsl-jpa:5.1.0:jakarta'
+
+    // === MapStruct (컴파일 타임 DTO ↔ Entity 매핑 코드 자동 생성) ===
+    implementation 'org.mapstruct:mapstruct:1.6.3'
+
+    // === JWT (JSON Web Token 인증/인가) ===
+    implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
+    runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'
+    runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.6'
+
+    // === Lombok ===
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+    // ── Annotation Processors (순서 중요: Lombok → MapStruct → QueryDSL) ──
+    // Lombok이 getter/setter 생성 → MapStruct가 getter 기반으로 매핑 코드 생성
+    annotationProcessor 'org.projectlombok:lombok-mapstruct-binding:0.2.0'
+    annotationProcessor 'org.mapstruct:mapstruct-processor:1.6.3'
+    // QueryDSL Q-class 자동 생성 (엔티티 기반 QUser, QOrder 등)
+    annotationProcessor 'com.querydsl:querydsl-apt:5.1.0:jakarta'
+    annotationProcessor 'jakarta.annotation:jakarta.annotation-api'
+    annotationProcessor 'jakarta.persistence:jakarta.persistence-api'
+
+    // === Test ===
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.kafka:spring-kafka-test'
+    testImplementation 'io.projectreactor:reactor-test'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}
