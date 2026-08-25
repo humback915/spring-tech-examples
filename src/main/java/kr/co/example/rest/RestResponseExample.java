@@ -172,7 +172,148 @@ public class RestResponseExample {
     }
 
     // ====================================================================
-    // [3] ApiResponse — 표준 응답 래퍼 (concert-msa-project 패턴)
+    // [3] 페이징 방식 비교 — 오프셋 기반 vs 커서 기반
+    // ====================================================================
+
+    /**
+     * 페이징 방식 2가지 — Offset-based vs Cursor-based(Keyset).
+     *
+     * <pre>
+     * ┌──────────────────────────────────────────────────────────────────────┐
+     * │  Offset-based (오프셋 기반)                                           │
+     * ├──────────────────────────────────────────────────────────────────────┤
+     * │  SQL: SELECT * FROM orders ORDER BY id DESC LIMIT 10 OFFSET 100     │
+     * │                                                                      │
+     * │  ✓ 장점: 특정 페이지로 바로 이동 가능 (1페이지 → 5페이지)              │
+     * │  ✓ 장점: Spring Data의 Page/Pageable 기본 지원                       │
+     * │  ✗ 단점: OFFSET이 클수록 느림 (앞의 데이터를 모두 스캔 후 건너뜀)      │
+     * │         OFFSET 100000 → 100000건 스캔 후 10건 반환                   │
+     * │  ✗ 단점: 실시간 데이터 추가/삭제 시 중복·누락 발생 가능                │
+     * │                                                                      │
+     * │  적합: 관리자 페이지, 전체 페이지 수 표시가 필요한 UI                   │
+     * └──────────────────────────────────────────────────────────────────────┘
+     *
+     * ┌──────────────────────────────────────────────────────────────────────┐
+     * │  Cursor-based (커서 기반 / Keyset Pagination)                         │
+     * ├──────────────────────────────────────────────────────────────────────┤
+     * │  SQL: SELECT * FROM orders WHERE id &lt; :lastId                   │
+     * │       ORDER BY id DESC LIMIT 10                                     │
+     * │                                                                      │
+     * │  ✓ 장점: 데이터 양에 관계없이 일정한 성능 (인덱스 범위 스캔)           │
+     * │  ✓ 장점: 실시간 데이터 추가/삭제에도 중복·누락 없음                    │
+     * │  ✗ 단점: 특정 페이지로 바로 이동 불가 (순차 탐색만 가능)               │
+     * │  ✗ 단점: 정렬 기준 컬럼에 인덱스 필수                                 │
+     * │                                                                      │
+     * │  적합: 무한 스크롤, "더보기" 버튼, 모바일 앱, 대용량 데이터             │
+     * └──────────────────────────────────────────────────────────────────────┘
+     *
+     * ┌──────────────────────────────────────────────────────────────────────┐
+     * │  비교 요약                                                            │
+     * ├──────────────────┬────────────────────┬──────────────────────────────┤
+     * │                  │  오프셋 기반        │  커서 기반                    │
+     * ├──────────────────┼────────────────────┼──────────────────────────────┤
+     * │  SQL             │  OFFSET + LIMIT    │  WHERE id &lt; ? + LIMIT    │
+     * │  성능            │  뒤쪽 페이지 느림  │  항상 일정                    │
+     * │  페이지 이동     │  자유롭게 이동     │  순차 이동만 가능              │
+     * │  데이터 정합성   │  중복/누락 가능    │  안전                         │
+     * │  전체 개수       │  COUNT 쿼리 가능   │  전체 개수 알기 어려움         │
+     * │  Spring 지원     │  Page, Pageable    │  직접 구현 필요               │
+     * │  UI 패턴         │  페이지 번호 탐색  │  무한 스크롤 / 더보기          │
+     * └──────────────────┴────────────────────┴──────────────────────────────┘
+     * </pre>
+     */
+
+    /**
+     * 커서 기반 페이징 — 컨트롤러 예시.
+     *
+     * <pre>
+     * 요청 예시:
+     * GET /api/examples/cursor?size=10                    (첫 페이지)
+     * GET /api/examples/cursor?cursor=152&size=10         (다음 페이지: ID 152 이후)
+     * </pre>
+     */
+    @GetMapping("/cursor")
+    public ResponseEntity<ApiResponse<CursorPageResponse<UserDto>>> getListByCursor(
+            @RequestParam(required = false) Long cursor, // 마지막 조회 항목의 ID (첫 페이지는 null)
+            @RequestParam(defaultValue = "10") int size) {
+
+        // ── 서비스 계층 구현 예시 ──
+        //
+        // [Repository]
+        // @Query("SELECT u FROM User u WHERE (:cursor IS NULL OR u.id < :cursor) " +
+        //        "ORDER BY u.id DESC")
+        // List<User> findByCursor(@Param("cursor") Long cursor, Pageable pageable);
+        //
+        // [Service]
+        // Pageable pageable = PageRequest.of(0, size + 1); // 1건 더 조회 (hasNext 판단)
+        // List<User> users = userRepository.findByCursor(cursor, pageable);
+        //
+        // boolean hasNext = users.size() > size;
+        // if (hasNext) users = users.subList(0, size); // 초과분 제거
+        //
+        // Long nextCursor = hasNext ? users.get(users.size() - 1).getId() : null;
+        // return new CursorPageResponse<>(users, nextCursor, hasNext);
+
+        return ResponseEntity.ok(ApiResponse.ok(
+                CursorPageResponse.empty()));
+    }
+
+    /**
+     * 커서 기반 페이징 응답 DTO.
+     *
+     * <pre>
+     * 응답 JSON:
+     * {
+     *   "data": {
+     *     "content": [ ... ],       ← 데이터 목록
+     *     "nextCursor": 142,        ← 다음 요청 시 전달할 커서 값
+     *     "hasNext": true           ← 다음 페이지 존재 여부
+     *   }
+     * }
+     *
+     * QueryDSL 커서 기반 구현:
+     *
+     * public CursorPageResponse&lt;OrderDto&gt; searchByCursor(Long cursor, int size) {
+     *     List&lt;Order&gt; orders = queryFactory
+     *         .selectFrom(order)
+     *         .where(
+     *             cursorLt(cursor),           // cursor가 null이면 조건 무시 (첫 페이지)
+     *             statusEq(OrderStatus.PAID)
+     *         )
+     *         .orderBy(order.id.desc())
+     *         .limit(size + 1)               // 1건 더 조회
+     *         .fetch();
+     *
+     *     boolean hasNext = orders.size() &gt; size;
+     *     if (hasNext) orders = orders.subList(0, size);
+     *
+     *     Long nextCursor = hasNext ? orders.get(orders.size() - 1).getId() : null;
+     *     return new CursorPageResponse&lt;&gt;(toDto(orders), nextCursor, hasNext);
+     * }
+     *
+     * private BooleanExpression cursorLt(Long cursor) {
+     *     return cursor != null ? order.id.lt(cursor) : null;
+     * }
+     * </pre>
+     */
+    @Getter
+    @Builder
+    public static class CursorPageResponse<T> {
+        private final List<T> content;     // 데이터 목록
+        private final Long nextCursor;     // 다음 페이지 커서 (null이면 마지막 페이지)
+        private final boolean hasNext;     // 다음 페이지 존재 여부
+
+        public static <T> CursorPageResponse<T> empty() {
+            return CursorPageResponse.<T>builder()
+                    .content(List.of())
+                    .nextCursor(null)
+                    .hasNext(false)
+                    .build();
+        }
+    }
+
+    // ====================================================================
+    // [4] ApiResponse — 표준 응답 래퍼 (concert-msa-project 패턴)
     // ====================================================================
 
     /**

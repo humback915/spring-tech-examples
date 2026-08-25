@@ -1,8 +1,13 @@
 package kr.co.example.jpa;
 
 import com.querydsl.core.BooleanBuilder;
+import com.querydsl.core.types.ExpressionUtils;
 import com.querydsl.core.types.Projections;
 import com.querydsl.core.types.dsl.BooleanExpression;
+import com.querydsl.core.types.dsl.Expressions;
+import com.querydsl.core.types.dsl.NumberExpression;
+import com.querydsl.core.types.dsl.StringExpression;
+import com.querydsl.jpa.JPAExpressions;
 import com.querydsl.jpa.impl.JPAQuery;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import jakarta.persistence.EntityManager;
@@ -301,6 +306,335 @@ public class QueryDslExample {
      * </pre>
      */
     public void booleanBuilderExample() {
+        // 개념 설명용 — Q-class 빌드 후 사용
+    }
+
+    // ====================================================================
+    // [5] JPAQueryFactory 주요 메서드 — select / update / delete
+    // ====================================================================
+
+    /**
+     * JPAQueryFactory 핵심 메서드 정리.
+     *
+     * <pre>
+     * ┌──────────────────────────────────────────────────────────────────────┐
+     * │  JPAQueryFactory 주요 메서드                                          │
+     * ├───────────────────────┬──────────────────────────────────────────────┤
+     * │  selectFrom(Q)        │ SELECT * FROM — 엔티티 전체 조회              │
+     * │  select(expr...)      │ SELECT col1, col2 — 특정 컬럼/DTO 조회       │
+     * │  update(Q)            │ UPDATE — 벌크 업데이트                        │
+     * │  delete(Q)            │ DELETE — 벌크 삭제                            │
+     * ├───────────────────────┼──────────────────────────────────────────────┤
+     * │  .fetch()             │ 결과 리스트 반환 (List&lt;T&gt;)             │
+     * │  .fetchOne()          │ 단건 조회 (없으면 null, 2건 이상이면 예외)    │
+     * │  .fetchFirst()        │ 첫 번째 결과 (limit(1).fetchOne())           │
+     * │  .fetchCount()        │ COUNT 쿼리 실행 (deprecated → select count)  │
+     * │  .fetchResults()      │ 결과 + 전체 개수 (deprecated)                │
+     * ├───────────────────────┼──────────────────────────────────────────────┤
+     * │  .where()             │ WHERE 조건 (BooleanExpression, null 무시)    │
+     * │  .orderBy()           │ ORDER BY (asc/desc)                          │
+     * │  .offset() / .limit() │ 페이징 (OFFSET / LIMIT)                     │
+     * │  .groupBy()           │ GROUP BY                                     │
+     * │  .having()            │ HAVING (그룹 조건)                            │
+     * │  .join() / .leftJoin()│ JOIN (fetchJoin으로 N+1 방지)                │
+     * │  .distinct()          │ SELECT DISTINCT                              │
+     * └───────────────────────┴──────────────────────────────────────────────┘
+     *
+     * ── 조회 예시 ──
+     *
+     * // 단건 조회
+     * Order order = queryFactory
+     *     .selectFrom(QOrder.order)
+     *     .where(QOrder.order.id.eq(orderId))
+     *     .fetchOne();
+     *
+     * // 목록 조회 + 정렬 + 페이징
+     * List&lt;Order&gt; orders = queryFactory
+     *     .selectFrom(order)
+     *     .leftJoin(order.user, user).fetchJoin()
+     *     .where(statusEq(OrderStatus.PAID))
+     *     .orderBy(order.createdDate.desc(), order.id.asc())
+     *     .offset(pageable.getOffset())
+     *     .limit(pageable.getPageSize())
+     *     .fetch();
+     *
+     * // 집계 (GROUP BY + HAVING)
+     * List&lt;Tuple&gt; stats = queryFactory
+     *     .select(order.user.id, order.totalAmount.sum())
+     *     .from(order)
+     *     .groupBy(order.user.id)
+     *     .having(order.totalAmount.sum().gt(100000))
+     *     .fetch();
+     *
+     * ── 벌크 UPDATE ──
+     *
+     * long updatedCount = queryFactory
+     *     .update(order)
+     *     .set(order.orderStatus, OrderStatus.CANCELLED)
+     *     .where(
+     *         order.orderStatus.eq(OrderStatus.PENDING),
+     *         order.createdDate.lt(LocalDateTime.now().minusDays(7))
+     *     )
+     *     .execute();
+     * // 주의: 벌크 연산 후 em.flush() + em.clear() 필요 (영속성 컨텍스트 동기화)
+     *
+     * ── 벌크 DELETE ──
+     *
+     * long deletedCount = queryFactory
+     *     .delete(order)
+     *     .where(order.orderStatus.eq(OrderStatus.CANCELLED))
+     *     .execute();
+     * </pre>
+     */
+    public void jpaQueryFactoryMethods() {
+        // 개념 설명용 — Q-class 빌드 후 사용
+    }
+
+    // ====================================================================
+    // [6] SubQuery — JPAExpressions
+    // ====================================================================
+
+    /**
+     * 서브쿼리 — JPAExpressions를 사용한 서브쿼리 작성법.
+     *
+     * <pre>
+     * ┌─────────────────────────────────────────────────────────────────────┐
+     * │  QueryDSL 서브쿼리                                                  │
+     * ├─────────────────────────────────────────────────────────────────────┤
+     * │  - JPAExpressions.select()로 서브쿼리 생성                          │
+     * │  - WHERE절, SELECT절에서 사용 가능                                   │
+     * │  - JPA 표준 한계: FROM절 서브쿼리(인라인 뷰) 지원 안 함              │
+     * │    → Native Query 또는 쿼리 분리로 해결                              │
+     * └─────────────────────────────────────────────────────────────────────┘
+     *
+     * ┌─────────────────────────────────────────────────────────────────────┐
+     * │  서브쿼리 사용 가능 위치                                              │
+     * ├──────────────┬──────────────────────────────────────────────────────┤
+     * │  WHERE절     │ .where(order.totalAmount.gt(JPAExpressions...))     │
+     * │  SELECT절    │ .select(Projections..., JPAExpressions...)          │
+     * │  HAVING절    │ .having(order.count().gt(JPAExpressions...))        │
+     * ├──────────────┼──────────────────────────────────────────────────────┤
+     * │  FROM절 (✗)  │ JPA 표준에서 미지원 → Native Query로 대체             │
+     * └──────────────┴──────────────────────────────────────────────────────┘
+     *
+     * ── [1] WHERE절 서브쿼리: 평균 금액 이상인 주문 조회 ──
+     *
+     * // SQL: SELECT * FROM orders WHERE total_amount &gt;= (SELECT AVG(total_amount) FROM orders)
+     *
+     * List&lt;Order&gt; aboveAvgOrders = queryFactory
+     *     .selectFrom(order)
+     *     .where(order.totalAmount.goe(
+     *         JPAExpressions
+     *             .select(order.totalAmount.avg())
+     *             .from(order)
+     *     ))
+     *     .fetch();
+     *
+     * ── [2] WHERE절 서브쿼리: IN절 ──
+     *
+     * // SQL: SELECT * FROM orders WHERE user_id IN (SELECT id FROM users WHERE status = 'ACTIVE')
+     *
+     * List&lt;Order&gt; activeUserOrders = queryFactory
+     *     .selectFrom(order)
+     *     .where(order.user.id.in(
+     *         JPAExpressions
+     *             .select(user.id)
+     *             .from(user)
+     *             .where(user.status.eq(UserStatus.ACTIVE))
+     *     ))
+     *     .fetch();
+     *
+     * ── [3] WHERE절 서브쿼리: EXISTS ──
+     *
+     * // SQL: SELECT * FROM users u WHERE EXISTS (SELECT 1 FROM orders o WHERE o.user_id = u.id)
+     *
+     * List&lt;User&gt; usersWithOrders = queryFactory
+     *     .selectFrom(user)
+     *     .where(JPAExpressions
+     *         .selectOne()
+     *         .from(order)
+     *         .where(order.user.id.eq(user.id))
+     *         .exists()
+     *     )
+     *     .fetch();
+     *
+     * ── [4] SELECT절 서브쿼리 (스칼라 서브쿼리) ──
+     *
+     * // SQL: SELECT u.name, (SELECT COUNT(*) FROM orders o WHERE o.user_id = u.id) AS order_count FROM users u
+     *
+     * // ExpressionUtils.as()로 서브쿼리에 별칭(alias) 부여
+     * List&lt;Tuple&gt; userOrderCounts = queryFactory
+     *     .select(
+     *         user.name,
+     *         ExpressionUtils.as(
+     *             JPAExpressions
+     *                 .select(order.count())
+     *                 .from(order)
+     *                 .where(order.user.id.eq(user.id)),
+     *             "orderCount"    // 별칭
+     *         )
+     *     )
+     *     .from(user)
+     *     .fetch();
+     *
+     * ── [5] 서브쿼리 + 동적 조건 조합 ──
+     *
+     * // 특정 금액 이상 주문이 있는 사용자만 조회 (금액이 null이면 조건 무시)
+     * private BooleanExpression hasOrderAbove(BigDecimal minAmount) {
+     *     if (minAmount == null) return null;
+     *     return JPAExpressions
+     *         .selectOne()
+     *         .from(order)
+     *         .where(
+     *             order.user.id.eq(user.id),
+     *             order.totalAmount.goe(minAmount)
+     *         )
+     *         .exists();
+     * }
+     * </pre>
+     */
+    public void subQueryExample() {
+        // 개념 설명용 — Q-class 빌드 후 사용
+    }
+
+    // ====================================================================
+    // [7] Expressions — 상수, 문자열 조합, CASE, 커스텀 SQL
+    // ====================================================================
+
+    /**
+     * Expressions 유틸리티 — QueryDSL에서 상수, 연산, CASE문, 커스텀 표현식 생성.
+     *
+     * <pre>
+     * ┌──────────────────────────────────────────────────────────────────────┐
+     * │  Expressions / Expression 관련 클래스 정리                             │
+     * ├──────────────────────┬───────────────────────────────────────────────┤
+     * │  Expressions         │ 상수, 템플릿, 타입 변환 등 유틸리티 팩토리      │
+     * │  ExpressionUtils     │ 서브쿼리 별칭(as), 표현식 조합 유틸리티          │
+     * │  NumberExpression    │ 숫자 연산 (sum, avg, multiply, divide 등)      │
+     * │  StringExpression    │ 문자열 연산 (concat, lower, trim, substring)   │
+     * │  BooleanExpression   │ 조건식 (eq, ne, gt, lt, in, between 등)       │
+     * │  CaseBuilder         │ CASE WHEN ... THEN ... ELSE ... END           │
+     * └──────────────────────┴───────────────────────────────────────────────┘
+     *
+     * ── [1] Expressions.constant() — 상수값 ──
+     *
+     * // SELECT 'FIXED_VALUE' AS label, name FROM users
+     * List&lt;Tuple&gt; result = queryFactory
+     *     .select(Expressions.constant("FIXED_VALUE"), user.name)
+     *     .from(user)
+     *     .fetch();
+     *
+     * ── [2] Expressions.asNumber() / asString() — 타입 변환 ──
+     *
+     * NumberExpression&lt;Integer&gt; zero = Expressions.asNumber(0);
+     * StringExpression empty = Expressions.asString("");
+     *
+     * ── [3] StringExpression — 문자열 조합 ──
+     *
+     * // CONCAT: "[", name, "] ", email
+     * StringExpression display = user.name
+     *     .prepend("[")
+     *     .append("] ")
+     *     .append(user.email);
+     *
+     * // lower / upper / trim / substring
+     * StringExpression lowerEmail = user.email.lower();
+     * StringExpression domain = user.email.substring(
+     *     user.email.indexOf("@").add(1));
+     *
+     * ── [4] NumberExpression — 숫자 연산 ──
+     *
+     * // 할인가 계산: totalAmount * (1 - discountRate / 100)
+     * NumberExpression&lt;BigDecimal&gt; discountedPrice = order.totalAmount
+     *     .multiply(Expressions.asNumber(1)
+     *         .subtract(order.discountRate.divide(100)));
+     *
+     * // 집계: sum, avg, min, max, count
+     * NumberExpression&lt;BigDecimal&gt; totalSum = order.totalAmount.sum();
+     * NumberExpression&lt;Double&gt; avgAmount = order.totalAmount.avg();
+     *
+     * ── [5] CaseBuilder — CASE WHEN 표현식 ──
+     *
+     * // CASE WHEN order_status = 'PAID' THEN '결제완료'
+     * //      WHEN order_status = 'SHIPPED' THEN '배송중'
+     * //      ELSE '기타' END AS statusLabel
+     *
+     * StringExpression statusLabel = new CaseBuilder()
+     *     .when(order.orderStatus.eq(OrderStatus.PAID)).then("결제완료")
+     *     .when(order.orderStatus.eq(OrderStatus.SHIPPED)).then("배송중")
+     *     .when(order.orderStatus.eq(OrderStatus.CANCELLED)).then("취소")
+     *     .otherwise("기타");
+     *
+     * // 숫자 CASE — 정렬 우선순위 지정
+     * NumberExpression&lt;Integer&gt; sortPriority = new CaseBuilder()
+     *     .when(order.orderStatus.eq(OrderStatus.PENDING)).then(1)
+     *     .when(order.orderStatus.eq(OrderStatus.PAID)).then(2)
+     *     .when(order.orderStatus.eq(OrderStatus.SHIPPED)).then(3)
+     *     .otherwise(99);
+     *
+     * // 정렬에 활용
+     * // .orderBy(sortPriority.asc(), order.createdDate.desc())
+     *
+     * ── [6] Expressions.stringTemplate() — DB 함수 호출 ──
+     *
+     * // MySQL DATE_FORMAT 함수 사용
+     * StringExpression formattedDate = Expressions.stringTemplate(
+     *     "DATE_FORMAT({0}, {1})",
+     *     order.createdDate,
+     *     Expressions.constant("%Y-%m-%d")
+     * );
+     *
+     * // MySQL IFNULL 함수 사용
+     * StringExpression safeName = Expressions.stringTemplate(
+     *     "IFNULL({0}, {1})",
+     *     user.name,
+     *     Expressions.constant("(이름없음)")
+     * );
+     *
+     * // MySQL MATCH ... AGAINST (전문 검색)
+     * BooleanExpression fullTextSearch = Expressions.booleanTemplate(
+     *     "MATCH({0}) AGAINST({1} IN BOOLEAN MODE)",
+     *     order.description,
+     *     Expressions.constant("검색어")
+     * );
+     *
+     * ── [7] ExpressionUtils — 표현식 조합 ──
+     *
+     * // 서브쿼리 별칭 (SELECT절에서 서브쿼리 사용 시 필수)
+     * // ExpressionUtils.as(subQuery, "alias")  → [6] SubQuery 참고
+     *
+     * // 여러 BooleanExpression 합치기 (null-safe)
+     * BooleanExpression combined = ExpressionUtils.allOf(
+     *     statusEq(condition.status()),
+     *     userIdEq(condition.userId()),
+     *     amountGoe(condition.minAmount())
+     * );
+     * // allOf: 모든 조건 AND (null은 자동 무시)
+     * // anyOf: 하나라도 만족하면 OR
+     *
+     * ── [8] 종합 예시: Projection + SubQuery + Expression ──
+     *
+     * List&lt;UserStatsDto&gt; stats = queryFactory
+     *     .select(Projections.constructor(UserStatsDto.class,
+     *         user.id,
+     *         user.name,
+     *         ExpressionUtils.as(
+     *             JPAExpressions.select(order.count())
+     *                 .from(order).where(order.user.id.eq(user.id)),
+     *             "orderCount"),
+     *         ExpressionUtils.as(
+     *             JPAExpressions.select(order.totalAmount.sum())
+     *                 .from(order).where(order.user.id.eq(user.id)),
+     *             "totalSpent"),
+     *         new CaseBuilder()
+     *             .when(user.status.eq(UserStatus.ACTIVE)).then("활성")
+     *             .otherwise("비활성")
+     *     ))
+     *     .from(user)
+     *     .fetch();
+     * </pre>
+     */
+    public void expressionsExample() {
         // 개념 설명용 — Q-class 빌드 후 사용
     }
 }
