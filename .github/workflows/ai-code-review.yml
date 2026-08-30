@@ -39,9 +39,8 @@ name: AI Code Review (Gemini)
 
 on:
   pull_request:
-    types: [opened, synchronize]  # PR 생성 또는 새 커밋 push 시
+    types: [opened, synchronize]
 
-# PR 코멘트 작성을 위한 권한
 permissions:
   contents: read
   pull-requests: write
@@ -51,67 +50,62 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # ── Step 1: 코드 체크아웃 ──
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # 전체 히스토리 (diff 비교용)
+          fetch-depth: 0
 
-      # ── Step 2: PR diff 추출 ──
-      - name: Get PR diff
-        id: diff
-        run: |
-          # base 브랜치와의 diff 추출
-          DIFF=$(git diff origin/${{ github.base_ref }}...HEAD -- '*.java' '*.yml' '*.yaml' '*.gradle' '*.properties' '*.md')
-
-          # diff가 비어있으면 종료
-          if [ -z "$DIFF" ]; then
-            echo "has_diff=false" >> "$GITHUB_OUTPUT"
-            echo "No code changes detected."
-            exit 0
-          fi
-
-          echo "has_diff=true" >> "$GITHUB_OUTPUT"
-
-          # diff 크기 제한 (Gemini 무료 입력 토큰 한도 대비)
-          # 약 12,000자 ≒ ~3,000 토큰 (안전 마진 포함)
-          MAX_CHARS=12000
-          if [ ${#DIFF} -gt $MAX_CHARS ]; then
-            DIFF="${DIFF:0:$MAX_CHARS}
-
-          ... (diff가 너무 길어 ${MAX_CHARS}자로 잘림)"
-          fi
-
-          # GitHub Output에 저장 (멀티라인)
-          {
-            echo "diff<<DIFF_EOF"
-            echo "$DIFF"
-            echo "DIFF_EOF"
-          } >> "$GITHUB_OUTPUT"
-
-      # ── Step 3: Gemini API 호출 ──
-      # ── Step 2.5: API Key 존재 여부 확인 ──
       - name: Check API key
         id: check_key
         run: |
           if [ -z "$GEMINI_API_KEY" ]; then
             echo "has_key=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::GEMINI_API_KEY Secret이 설정되지 않았습니다. 리뷰를 건너뜁니다."
+            echo "::warning::GEMINI_API_KEY Secret이 설정되지 않았습니다."
           else
             echo "has_key=true" >> "$GITHUB_OUTPUT"
           fi
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
 
-      - name: Call Gemini API for review
-        id: review
-        if: steps.diff.outputs.has_diff == 'true' && steps.check_key.outputs.has_key == 'true'
+      - name: Get PR diff
+        id: diff
+        if: steps.check_key.outputs.has_key == 'true'
+        run: |
+          DIFF=$(git diff "origin/${{ github.base_ref }}"...HEAD -- '*.java' '*.yml' '*.yaml' '*.gradle' '*.properties' '*.md')
+          if [ -z "$DIFF" ]; then
+            echo "has_diff=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_diff=true" >> "$GITHUB_OUTPUT"
+            echo "$DIFF" > /tmp/pr_diff.txt
+          fi
+
+      - name: Call Gemini API and post review
+        if: steps.check_key.outputs.has_key == 'true' && steps.diff.outputs.has_diff == 'true'
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO_FULL_NAME: ${{ github.repository }}
         run: |
-          # 프롬프트 구성
-          PROMPT=$(cat <<'PROMPT_EOF'
-          ## 역할
+          python3 << 'PYTHON_SCRIPT'
+          import json, os, urllib.request, urllib.error
+
+          # ── 설정 ──
+          API_KEY = os.environ["GEMINI_API_KEY"]
+          GITHUB_TOKEN = os.environ["GITHUB_TOKEN"]
+          PR_NUMBER = os.environ["PR_NUMBER"]
+          REPO = os.environ["REPO_FULL_NAME"]
+          MAX_DIFF_CHARS = 12000
+
+          # ── diff 읽기 ──
+          with open("/tmp/pr_diff.txt", "r") as f:
+              diff = f.read()
+
+          if len(diff) > MAX_DIFF_CHARS:
+              diff = diff[:MAX_DIFF_CHARS] + "\n\n... (diff가 너무 길어 잘림)"
+
+          # ── 프롬프트 ──
+          prompt = """## 역할
 
           당신은 5년 이상 경력의 시니어 Java/Spring Boot 백엔드 개발자이자 코드 리뷰어입니다.
           대규모 트래픽 환경에서의 운영 경험이 있으며, 아래 기술 스택에 정통합니다.
@@ -133,7 +127,7 @@ jobs:
 
           1. 모든 주석은 한글로 작성
           2. 클래스 상단에 ASCII 다이어그램으로 동작 흐름 설명
-          3. 각 섹션은 `// ================================================================` 구분선 사용
+          3. 각 섹션은 // ================================================================ 구분선 사용
           4. Lombok 활용: @Slf4j, @RequiredArgsConstructor, @Builder
           5. 필드 주입(@Autowired) 대신 생성자 주입(@RequiredArgsConstructor) 사용
           6. 매직 넘버 대신 static final 상수 정의
@@ -146,13 +140,13 @@ jobs:
 
           아래 항목 순서대로 우선순위를 두고 리뷰하세요:
 
-          1. **동시성/스레드 안전성**: 공유 자원 접근, 락 누락, Race Condition
-          2. **리소스 누수**: Connection, Stream, Lock의 미해제 (try-with-resources 미사용)
-          3. **예외 처리**: catch 후 무시, 너무 넓은 catch, 원인 체인(cause) 누락
-          4. **보안**: 하드코딩된 시크릿, SQL Injection, XSS, 민감정보 로깅
-          5. **성능**: N+1 쿼리, 불필요한 DB 호출, 캐시 미활용, 대량 데이터 메모리 로딩
-          6. **Spring 안티패턴**: self-invocation(@Transactional/@Async), 필드 주입, 순환 참조
-          7. **API 설계**: REST 규칙 위반, 일관되지 않은 응답 형식, 적절하지 않은 HTTP 상태 코드
+          1. 동시성/스레드 안전성: 공유 자원 접근, 락 누락, Race Condition
+          2. 리소스 누수: Connection, Stream, Lock의 미해제 (try-with-resources 미사용)
+          3. 예외 처리: catch 후 무시, 너무 넓은 catch, 원인 체인(cause) 누락
+          4. 보안: 하드코딩된 시크릿, SQL Injection, XSS, 민감정보 로깅
+          5. 성능: N+1 쿼리, 불필요한 DB 호출, 캐시 미활용, 대량 데이터 메모리 로딩
+          6. Spring 안티패턴: self-invocation(@Transactional/@Async), 필드 주입, 순환 참조
+          7. API 설계: REST 규칙 위반, 일관되지 않은 응답 형식, 적절하지 않은 HTTP 상태 코드
 
           아래 항목은 리뷰하지 마세요:
           - import 순서, 공백/줄바꿈 스타일
@@ -163,116 +157,87 @@ jobs:
 
           아래 마크다운 형식을 정확히 따르세요. 해당 없는 섹션은 "특이 사항 없음"으로 작성하세요.
 
-          ## 🔍 AI 코드 리뷰
+          ## AI 코드 리뷰
 
-          ### 📋 변경 요약
+          ### 변경 요약
           > 변경 사항에 대한 1-2문장 요약
 
-          ### ✅ 잘된 점
+          ### 잘된 점
           - 잘 작성된 부분과 이유
 
-          ### 🔧 개선 제안
-          - **[항목]**: 개선 내용 (구체적인 코드 예시 포함)
+          ### 개선 제안
+          - [항목]: 개선 내용 (구체적인 코드 예시 포함)
 
-          ### ⚠️ 잠재적 이슈
-          - **[심각도: 높음/중간/낮음]**: 이슈 설명 및 해결 방안
+          ### 잠재적 이슈
+          - [심각도: 높음/중간/낮음]: 이슈 설명 및 해결 방안
 
-          ### 💡 참고 사항
+          ### 참고 사항
           - Spring/Java 관련 팁이나 대안 (선택적)
-          PROMPT_EOF
-          )
+          """
 
-          # diff 내용에서 JSON 특수문자 이스케이프
-          ESCAPED_DIFF=$(echo "${{ steps.diff.outputs.diff }}" | python3 -c "
-          import sys, json
-          content = sys.stdin.read()
-          print(json.dumps(content))
-          ")
-
-          ESCAPED_PROMPT=$(echo "$PROMPT" | python3 -c "
-          import sys, json
-          content = sys.stdin.read()
-          print(json.dumps(content))
-          ")
-
-          # Gemini API 요청 본문 구성
-          REQUEST_BODY=$(cat <<JSON_EOF
-          {
-            "contents": [
-              {
-                "parts": [
+          # ── Gemini API 호출 ──
+          request_body = json.dumps({
+              "contents": [
                   {
-                    "text": ${ESCAPED_PROMPT}
-                  },
-                  {
-                    "text": ${ESCAPED_DIFF}
+                      "parts": [
+                          {"text": prompt},
+                          {"text": f"아래는 PR의 git diff입니다:\n\n{diff}"}
+                      ]
                   }
-                ]
+              ],
+              "generationConfig": {
+                  "temperature": 0.3,
+                  "maxOutputTokens": 2048
               }
-            ],
-            "generationConfig": {
-              "temperature": 0.3,
-              "maxOutputTokens": 2048
-            }
-          }
-          JSON_EOF
+          }).encode("utf-8")
+
+          url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={API_KEY}"
+
+          req = urllib.request.Request(
+              url,
+              data=request_body,
+              headers={"Content-Type": "application/json"},
+              method="POST"
           )
 
-          # Gemini API 호출 (gemini-2.0-flash 무료 모델)
-          RESPONSE=$(curl -s -w "\n%{http_code}" \
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}" \
-            -H "Content-Type: application/json" \
-            -d "$REQUEST_BODY")
-
-          # HTTP 상태 코드 분리
-          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
-          BODY=$(echo "$RESPONSE" | sed '$d')
-
-          echo "Gemini API HTTP Status: $HTTP_CODE"
-
-          if [ "$HTTP_CODE" != "200" ]; then
-            echo "Gemini API 호출 실패 (HTTP $HTTP_CODE)"
-            echo "$BODY"
-            echo "review_text=⚠️ Gemini API 호출에 실패했습니다. (HTTP $HTTP_CODE)" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          # 응답에서 텍스트 추출
-          REVIEW_TEXT=$(echo "$BODY" | python3 -c "
-          import sys, json
           try:
-              data = json.load(sys.stdin)
-              text = data['candidates'][0]['content']['parts'][0]['text']
-              print(text)
-          except (KeyError, IndexError, json.JSONDecodeError) as e:
-              print(f'⚠️ Gemini 응답 파싱 실패: {e}')
-          ")
+              with urllib.request.urlopen(req, timeout=60) as resp:
+                  data = json.loads(resp.read().decode("utf-8"))
+                  review_text = data["candidates"][0]["content"]["parts"][0]["text"]
+                  print(f"Gemini API 호출 성공 ({len(review_text)}자)")
+          except urllib.error.HTTPError as e:
+              body = e.read().decode("utf-8", errors="replace")
+              review_text = f"Gemini API 호출 실패 (HTTP {e.code})\n```\n{body[:500]}\n```"
+              print(review_text)
+          except Exception as e:
+              review_text = f"Gemini API 호출 중 오류: {e}"
+              print(review_text)
 
-          # GitHub Output에 저장 (멀티라인)
-          {
-            echo "review_text<<REVIEW_EOF"
-            echo "$REVIEW_TEXT"
-            echo "REVIEW_EOF"
-          } >> "$GITHUB_OUTPUT"
+          # ── PR 코멘트 게시 ──
+          comment_body = review_text + (
+              "\n\n---\n"
+              "> 이 리뷰는 **Google Gemini API**(무료)에 의해 자동 생성되었습니다.\n"
+              "> 학습/데모 목적이며, 실무 판단의 근거로 사용하지 마세요."
+          )
 
-      # ── Step 4: PR 코멘트 게시 ──
-      - name: Post review comment
-        if: steps.diff.outputs.has_diff == 'true' && steps.check_key.outputs.has_key == 'true'
-        uses: actions/github-script@v7
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const reviewText = `${{ steps.review.outputs.review_text }}`;
+          comment_data = json.dumps({"body": comment_body}).encode("utf-8")
+          comment_url = f"https://api.github.com/repos/{REPO}/issues/{PR_NUMBER}/comments"
 
-            const body = reviewText + '\n\n---\n' +
-              '> 🤖 이 리뷰는 **Google Gemini API**(무료)에 의해 자동 생성되었습니다.\n' +
-              '> 학습/데모 목적이며, 실무 판단의 근거로 사용하지 마세요.';
+          comment_req = urllib.request.Request(
+              comment_url,
+              data=comment_data,
+              headers={
+                  "Authorization": f"Bearer {GITHUB_TOKEN}",
+                  "Content-Type": "application/json",
+                  "Accept": "application/vnd.github.v3+json"
+              },
+              method="POST"
+          )
 
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: body
-            });
-
-            console.log('PR 코멘트 게시 완료');
+          try:
+              with urllib.request.urlopen(comment_req, timeout=30) as resp:
+                  print(f"PR 코멘트 게시 완료 (HTTP {resp.status})")
+          except Exception as e:
+              print(f"PR 코멘트 게시 실패: {e}")
+              raise
+          PYTHON_SCRIPT
