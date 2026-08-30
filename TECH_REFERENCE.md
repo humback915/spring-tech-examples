@@ -10,6 +10,9 @@
 2. [Spring Kafka](#2-spring-kafka)
 3. [Redis + Redisson](#3-redis--redisson)
     - 3-B. [로컬 캐시 (Caffeine)](#3-b-로컬-캐시-caffeine)
+    - 3-C. [캐시 전략 5종](#3-c-캐시-전략-5종)
+    - 3-D. [데이터 구조 실전 활용](#3-d-데이터-구조-실전-활용)
+    - 3-E. [PER (Probabilistic Early Recomputation)](#3-e-per-probabilistic-early-recomputation)
 4. [스케줄링 (@Scheduled)](#4-스케줄링-scheduled)
 5. [트랜잭션 관리](#5-트랜잭션-관리)
     - 5-B. [트랜잭션 전파 (Propagation)](#5-b-트랜잭션-전파-propagation)
@@ -35,6 +38,7 @@
 14. [REST API 클라이언트 (호출 방식 비교)](#14-rest-api-클라이언트)
 15. [Validation (입력 검증)](#15-validation)
 16. [Exception Handling (예외 처리)](#16-exception-handling)
+    - 16-B. [Checked vs Unchecked Exception](#16-b-checked-vs-unchecked-exception)
 17. [JPA Entity 심화](#17-jpa-entity-심화)
 18. [JPA Repository + QueryDSL](#18-jpa-repository--querydsl)
 19. [Spring Security (JWT + Session/Redis)](#19-spring-security)
@@ -118,6 +122,17 @@ DeadLetterPublishingRecoverer
 | `max-poll-records` | `10` | 한 번에 가져올 최대 메시지 수 |
 | `addNotRetryableExceptions` | `IllegalArgumentException` 등 | 재시도 없이 즉시 DLT 이동 |
 
+### yml 설정 vs Bean 설정
+
+| 구분 | application.yml | @Bean (Java 코드) |
+|------|----------------|------------------|
+| 역할 | 단순 속성값 (주소, 직렬화, 숫자) | 커스텀 로직 (에러 핸들러, DLT 라우팅) |
+| 대상 | `bootstrap-servers`, `acks`, `retries`, `group-id`, `serializer`, `concurrency` 등 | `DefaultErrorHandler`, `DeadLetterPublishingRecoverer`, `ConcurrentKafkaListenerContainerFactory` |
+| 자동 구성 | Spring Boot가 Factory/Template 자동 생성 | Bean 등록 시 해당 타입의 자동 구성 비활성화 |
+| 변경 방식 | 재시작만으로 적용 | 코드 수정 + 재빌드 필요 |
+
+> **주의**: `ConcurrentKafkaListenerContainerFactory`를 @Bean으로 등록하면 Spring Boot의 자동 Factory 생성이 무시된다. ConsumerFactory 주입과 에러 핸들러를 직접 설정해야 한다.
+
 ### Transactional Outbox Pattern
 
 DB 트랜잭션과 이벤트 발행의 원자성을 보장하는 패턴.
@@ -138,7 +153,7 @@ DB 트랜잭션과 이벤트 발행의 원자성을 보장하는 패턴.
 | 항목 | 내용 |
 |------|------|
 | 패키지 | `kr.co.example.redis` |
-| 파일 | `RedisConfig.java`, `RedisStockService.java` |
+| 파일 | `RedisConfig.java`, `RedisStockService.java`, `RedisCacheStrategyService.java`, `RedisDataStructureService.java` |
 
 인메모리 키-값 데이터 스토어. 캐시, 재고 관리, 분산 락 등에 활용한다.
 
@@ -237,6 +252,205 @@ Caffeine은 Google Guava Cache의 후속 라이브러리로, Window TinyLfu 퇴�
 
 앱 시작 직후 캐시가 비어있는 Cold Start 문제를 방지.
 `@PostConstruct`에서 자주 사용되는 데이터를 미리 로딩하여 시작 직후부터 높은 히트율 유지.
+
+### 3-C. 캐시 전략 5종
+
+| 항목 | 내용 |
+|------|------|
+| 패키지 | `kr.co.example.redis` |
+| 파일 | `RedisCacheStrategyService.java` |
+
+캐시와 DB 간 데이터 동기화 방식에 따른 5가지 전략 패턴.
+
+#### 전략 비교
+
+| 전략 | 읽기 성능 | 쓰기 성능 | 일관성 | 구현 복잡도 |
+|------|----------|----------|--------|-----------|
+| Cache-Aside | 높음 | 보통 | 캐시 미스 시 최신 | 낮음 |
+| Read-Through | 높음 | 보통 | 캐시 계층이 자동 로딩 | 보통 |
+| Write-Through | 높음 | 낮음 | 항상 일관 (동기 쓰기) | 보통 |
+| Write-Behind | 높음 | 높음 | 지연 쓰기로 불일치 가능 | 높음 |
+| Write-Around | 보통 | 높음 | 첫 읽기 시 캐시 미스 | 낮음 |
+
+#### 전략별 동작 흐름
+
+```
+[Cache-Aside]  읽기: App → Cache? → 미스 → DB → Cache 저장
+               쓰기: App → DB 저장 → Cache 삭제
+
+[Read-Through] 읽기: App → Cache? → 미스 → Cache가 DB 로딩 → 반환
+
+[Write-Through] 쓰기: App → Cache 저장 → Cache가 DB 동기 저장
+
+[Write-Behind]  쓰기: App → Cache 저장 → 버퍼 적재 → 비동기 DB 배치 쓰기
+
+[Write-Around]  쓰기: App → DB 직접 저장 (Cache 무시)
+                읽기: Cache 미스 시 DB → Cache 저장
+```
+
+#### 선택 가이드
+
+| 상황 | 권장 전략 |
+|------|----------|
+| 읽기 빈번, 쓰기 드묾 | Cache-Aside / Read-Through |
+| 읽기/쓰기 모두 빈번 | Write-Behind |
+| 데이터 일관성 중요 | Write-Through |
+| 쓰기 후 즉시 읽기 드묾 | Write-Around |
+| 범용 (가장 일반적) | Cache-Aside |
+
+### 3-D. 데이터 구조 실전 활용
+
+| 항목 | 내용 |
+|------|------|
+| 패키지 | `kr.co.example.redis` |
+| 파일 | `RedisDataStructureService.java` |
+
+String, Hash, Set 자료구조의 실전 활용법과 Lua Script를 이용한 원자적 연산 예제.
+
+#### Spring 메서드 → Redis 명령 매핑
+
+| 구조 | Spring 메서드 | Redis 명령 | 활용 |
+|------|-------------|-----------|------|
+| String | `opsForValue().set()` | `SET` | 단순 캐시, 세션 |
+| String | `opsForValue().increment()` | `INCR` | 카운터 |
+| String | `opsForValue().setIfAbsent()` | `SETNX` | 간이 분산 락 |
+| String | `opsForValue().multiGet()` | `MGET` | 일괄 조회 |
+| Hash | `opsForHash().put()` | `HSET` | 객체 필드별 저장 |
+| Hash | `opsForHash().entries()` | `HGETALL` | 전체 필드 조회 |
+| Hash | `opsForHash().increment()` | `HINCRBY` | 필드별 카운터 |
+| Set | `opsForSet().add()` | `SADD` | 태그, 관심사 |
+| Set | `opsForSet().intersect()` | `SINTER` | 공통 관심사 |
+| Set | `opsForSet().randomMember()` | `SRANDMEMBER` | 랜덤 추첨 |
+
+#### Lua Script 원자적 연산
+
+여러 Redis 명령을 서버 측에서 하나의 원자적 단위로 실행. Race Condition 방지에 활용.
+
+| 패턴 | 동작 | 반환 |
+|------|------|------|
+| 재고 차감 | GET → 비교 → DECRBY | 남은 수량 (-1: 부족) |
+| Rate Limiter | GET → 비교 → INCR + EXPIRE | 1: 허용, 0: 거부 |
+
+Spring에서는 `DefaultRedisScript<Long>`에 Lua 스크립트를 전달하고, `StringRedisTemplate.execute()`로 실행한다.
+Java 21 text block(`"""`)으로 스크립트를 가독성 있게 작성할 수 있다.
+
+#### Lua ZPOPMIN + INCRBY (대기열 소비 + 카운터)
+
+대기열(Sorted Set)에서 항목을 꺼내면서 처리 카운터를 원자적으로 갱신하는 패턴.
+
+```
+[Sorted Set: 대기열]         [String: 카운터]
+│ score │ member     │       │ counter: 47     │
+│   1   │ order:101  │  →    │ counter: 50 (+3)│
+│   2   │ order:102  │       └─────────────────┘
+│   3   │ order:103  │
+└───────┴────────────┘
+      ↑ 3개 ZPOPMIN
+```
+
+| 변형 | 동작 | 반환 |
+|------|------|------|
+| ZPOPMIN + INCRBY | 꺼내기 + 카운터 증가 | 꺼낸 멤버 목록 |
+| ZPOPMIN + INCRBY + HSET | 꺼내기 + 카운터 + 이력 기록 | 꺼낸 개수 |
+
+### 3-E. PER (Probabilistic Early Recomputation)
+
+| 항목 | 내용 |
+|------|------|
+| 패키지 | `kr.co.example.redis` |
+| 파일 | `ProbabilisticEarlyRecomputationService.java` |
+
+Cache Stampede를 확률적으로 방지하는 조기 재계산 알고리즘.
+2015년 논문 "Optimal Probabilistic Cache Stampede Prevention"에서 제안. XFetch로도 알려져 있다.
+
+#### 기존 TTL 방식의 문제
+
+```
+캐시 SET ────────── TTL 만료
+                       │
+                  ┌────┼────┐
+               요청1  요청2  요청3  ← 동시 캐시 미스
+                  │    │    │
+                  DB   DB   DB       ← 중복 DB 조회 (Stampede)
+```
+
+#### PER 알고리즘의 해결
+
+TTL 만료 **전에** 확률적으로 캐시를 미리 갱신한다.
+
+```
+캐시 SET ─── 확률적 갱신 구간 ── TTL 만료
+                │
+             요청 A가 확률 판단 → 조기 갱신 (DB 1회)
+                                   ← 다른 요청은 캐시 히트
+```
+
+#### 핵심 수식
+
+```
+currentTime - (delta * beta * ln(random())) > expiry
+```
+
+| 변수 | 설명 |
+|------|------|
+| `delta` | 재계산 소요 시간 (DB 조회 시간) |
+| `beta` | 튜닝 파라미터 (1.0 = 논문 최적값) |
+| `ln(random())` | (0,1) 균등 분포의 자연 로그 (항상 음수) |
+| `expiry` | 캐시 만료 시각 |
+
+- 만료까지 남은 시간이 짧을수록 → 재계산 확률 증가
+- delta(재계산 비용)가 클수록 → 더 일찍 재계산 시도
+- beta가 클수록 → 재계산 빈도 증가
+
+#### PER vs 다른 Stampede 방지 기법
+
+| 기법 | 추가 인프라 | 동시성 | 특징 |
+|------|-----------|--------|------|
+| 분산 락 (Redisson) | Redis | 1개 통과 | 락 경합, 대기 시간 |
+| LoadingCache | 없음 | 1개 통과 | 단일 JVM 한정 |
+| **PER** | **없음** | **확률적** | **락 없이 자연스러운 갱신** |
+| TTL Jitter | 없음 | 분산 | 만료 시점만 분산 |
+
+#### 구현 변형
+
+| 변형 | 키 수 | 특징 |
+|------|-------|------|
+| 기본 (메타데이터 분리) | 3개 | 값, 만료 시각, delta 각각 저장 |
+| Compact (단일 키) | 1개 | `value\|expiry\|delta` 형태로 압축 |
+| PER + TTL Jitter | 1개 | TTL에 ±20% 랜덤 편차 추가 |
+
+#### Redis SPOF 방지 — DB 폴백
+
+Redis 장애 시 전체 서비스가 중단되지 않도록 DB 직접 조회로 자동 전환.
+
+```
+[정상]  요청 → Redis(PER) → 히트 → 반환
+                             ↓ 미스
+                            DB → Redis 저장 → 반환
+
+[장애]  요청 → Redis → 예외!
+                        ↓ catch
+                       DB 직접 조회 → 반환 (Redis 저장 생략)
+```
+
+| 전략 | 설명 |
+|------|------|
+| try-catch 폴백 | Redis 예외 시 DB 직접 조회 |
+| Circuit Breaker | 연속 실패 N회 → DB만 사용 (냉각 후 Redis 재시도) |
+| best-effort 복구 | DB 조회 후 Redis 저장 시도 (실패 무시) |
+| Redis Sentinel/Cluster | 인프라 레벨 HA (자동 페일오버) |
+
+#### Redis Circuit Breaker 상태 전이
+
+```
+CLOSED ──(연속 실패 5회)──→ OPEN
+(Redis PER 정상)           (Redis 차단, DB만 사용)
+  ↑                           │
+  │                    30초 냉각
+  │                           ↓
+  └───(성공)──── HALF_OPEN ───(실패)──→ OPEN
+                (Redis 시험 1회)
+```
 
 ---
 
@@ -945,7 +1159,7 @@ Bean Validation(JSR-380) 어노테이션, 커스텀 Validator, BindingResult 직
 | 항목 | 내용 |
 |------|------|
 | 패키지 | `kr.co.example.exception` |
-| 파일 | `GlobalExceptionHandler.java`, `CustomException.java`, `ErrorResponse.java`, `ExceptionAopExample.java` |
+| 파일 | `GlobalExceptionHandler.java`, `CustomException.java`, `ErrorResponse.java`, `ExceptionAopExample.java`, `CheckedUncheckedExample.java` |
 
 ### 예외처리 전략
 
@@ -956,6 +1170,34 @@ Bean Validation(JSR-380) 어노테이션, 커스텀 Validator, BindingResult 직
 | 컨트롤러 내부 `@ExceptionHandler` | 해당 컨트롤러만 | 개별 오버라이드 |
 | AOP `@AfterThrowing` | 모든 Bean | 예외 로깅/모니터링 |
 | AOP `@Around` | 모든 Bean | 예외 변환/재시도 |
+
+### 16-B. Checked vs Unchecked Exception
+
+| 항목 | Checked Exception | Unchecked Exception |
+|------|------------------|-------------------|
+| 상속 대상 | `Exception` | `RuntimeException` |
+| 컴파일러 강제 | O (try-catch/throws 필수) | X (선택적) |
+| 발생 원인 | 외부 환경 문제 (파일, 네트워크) | 프로그래밍 실수, 논리 오류 |
+| `@Transactional` 롤백 | 기본 롤백 안 됨 | 기본 롤백됨 |
+| 대표 예시 | `IOException`, `ParseException` | `NullPointerException`, `IllegalArgumentException` |
+
+#### @Transactional 롤백 규칙
+
+```
+RuntimeException (Unchecked) → 자동 롤백
+Exception (Checked)          → 롤백 안 됨 (커밋됨!)
+@Transactional(rollbackFor = Exception.class) → Checked도 롤백
+```
+
+#### Checked → Unchecked 래핑 패턴 (실무 권장)
+
+```java
+try {
+    Files.readAllLines(path);
+} catch (IOException e) {
+    throw new RuntimeException("파일 처리 실패", e);  // cause 보존 필수
+}
+```
 
 ---
 
@@ -1243,7 +1485,10 @@ spring-tech-examples/
     │   └── OutboxService.java                   ← Transactional Outbox Pattern
     ├── redis/
     │   ├── RedisConfig.java                     ← Lettuce, StringRedisTemplate, Redisson
-    │   └── RedisStockService.java               ← Hash 재고, @Cacheable, 분산 락
+    │   ├── RedisStockService.java               ← Hash 재고, @Cacheable, 분산 락
+    │   ├── RedisCacheStrategyService.java        ← 캐시 전략 5종 (Cache-Aside, Write-Through 등)
+    │   ├── RedisDataStructureService.java        ← String/Hash/Set 활용, Lua Script, ZPOPMIN+INCRBY
+    │   └── ProbabilisticEarlyRecomputationService.java ← PER 알고리즘, DB 폴백, Redis Circuit Breaker
     ├── cache/
     │   ├── LocalCacheConfig.java                ← Caffeine CacheManager, 퇴거 정책
     │   └── LocalCacheService.java               ← Manual/Loading/@Cacheable, 멀티 레벨, 워밍
@@ -1293,7 +1538,8 @@ spring-tech-examples/
     │   ├── GlobalExceptionHandler.java          ← @RestControllerAdvice, 통합 예외처리
     │   ├── CustomException.java                 ← DomainException, 에러 코드 Enum
     │   ├── ErrorResponse.java                   ← 표준 에러 응답 DTO
-    │   └── ExceptionAopExample.java             ← AOP 예외 로깅/변환, 개별 예외처리
+    │   ├── ExceptionAopExample.java             ← AOP 예외 로깅/변환, 개별 예외처리
+    │   └── CheckedUncheckedExample.java        ← Checked/Unchecked 비교, 래핑, 롤백 차이
     ├── jpa/
     │   ├── BaseEntity.java                      ← @MappedSuperclass, Auditing, @Version
     │   ├── JpaEntityExample.java                ← 관계 매핑, Soft Delete, @Embedded

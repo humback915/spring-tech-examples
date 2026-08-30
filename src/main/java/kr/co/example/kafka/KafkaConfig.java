@@ -47,6 +47,38 @@ import org.springframework.util.backoff.FixedBackOff;
  *    - DB 트랜잭션과 이벤트 발행의 원자성 보장
  *    - Outbox 테이블에 이벤트 저장 → 별도 프로세스가 Kafka 발행
  *
+ * ── yml 설정 vs Bean 설정 ──
+ *
+ * Spring Boot의 Kafka 자동 구성(Auto-Configuration)은 application.yml 속성으로
+ * ProducerFactory, ConsumerFactory, KafkaTemplate 등을 자동 생성한다.
+ * 단순 속성(주소, 직렬화, acks 등)은 yml로 충분하지만,
+ * 커스텀 로직(에러 핸들러, DLT 라우팅 등)이 필요하면 Bean을 직접 정의한다.
+ *
+ * ┌────────────────────────────────────────────────────────────────────┐
+ * │ 설정 방식            │ 대상                                       │
+ * ├──────────────────────┼────────────────────────────────────────────┤
+ * │ application.yml      │ 단순 속성값 (문자열, 숫자, boolean)         │
+ * │ (자동 구성)          │ bootstrap-servers, group-id                │
+ * │                      │ acks, retries, compression-type            │
+ * │                      │ key/value serializer/deserializer          │
+ * │                      │ auto-offset-reset, max-poll-records        │
+ * │                      │ enable.idempotence (properties.* 하위)     │
+ * │                      │ listener.concurrency                       │
+ * ├──────────────────────┼────────────────────────────────────────────┤
+ * │ @Bean (Java 코드)    │ 커스텀 로직이 필요한 설정                    │
+ * │ (수동 구성)          │ DefaultErrorHandler (재시도 전략)            │
+ * │                      │ DeadLetterPublishingRecoverer (DLT 라우팅)  │
+ * │                      │ ConcurrentKafkaListenerContainerFactory    │
+ * │                      │ 예외별 재시도/즉시실패 분류                  │
+ * │                      │ 인터셉터, 필터, 파티션 전략                  │
+ * │                      │ 커스텀 Serializer/Deserializer              │
+ * └──────────────────────┴────────────────────────────────────────────┘
+ *
+ * 주의: Bean을 직접 정의하면 해당 타입의 자동 구성이 비활성화된다.
+ * 예) ConcurrentKafkaListenerContainerFactory를 @Bean으로 등록하면
+ *     Spring Boot의 자동 Factory 생성이 무시되므로,
+ *     ConsumerFactory 주입과 에러 핸들러 설정을 직접 해야 한다.
+ *
  * ── 사용 특성 ──
  *
  * 장점:

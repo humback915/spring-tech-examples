@@ -68,24 +68,45 @@ spring:
           min-idle: 2
           max-wait: 1000
 
+  # ── Spring Kafka 설정 (yml로 가능한 항목) ──
+  # 아래 속성들은 Spring Boot 자동 구성이 ProducerFactory, ConsumerFactory,
+  # KafkaTemplate을 생성할 때 사용한다.
+  # 커스텀 로직(에러 핸들러, DLT 라우팅 등)은 yml로 불가 → KafkaConfig.java에서 @Bean 정의
   kafka:
+    # Kafka 브로커 주소 (클러스터: host1:9092,host2:9092,host3:9092)
     bootstrap-servers: localhost:9092
     consumer:
+      # Consumer Group ID — 같은 그룹의 Consumer끼리 파티션 분담
       group-id: example-group
+      # 오프셋 초기화 정책 (earliest: 처음부터, latest: 최신부터)
       auto-offset-reset: earliest
+      # poll() 한 번에 가져올 최대 레코드 수 (배치 크기 조절)
       max-poll-records: 10
+      # 메시지 키/값 역직렬화 — 문자열 기본
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
     producer:
+      # acks: 메시지 수신 확인 수준
+      #   0: 확인 안 함 (가장 빠름, 유실 가능)
+      #   1: Leader만 확인 (기본)
+      #   all(-1): 모든 ISR 확인 (가장 안전, 권장)
       acks: all
+      # 전송 실패 시 자동 재시도 횟수
       retries: 3
+      # 메시지 압축 방식 (none, gzip, snappy, lz4, zstd)
+      # lz4: 빠른 압축/해제, 적당한 압축률 — 실시간 처리에 적합
       compression-type: lz4
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      # Spring Boot가 매핑하지 않는 Kafka 네이티브 속성은 properties.* 하위에 설정
       properties:
+        # 멱등성 프로듀서 — 네트워크 재전송으로 인한 중복 메시지 방지
         enable.idempotence: true
+        # 멱등성 활성 시 최대 5까지 허용 (순서 보장 + 성능 균형)
         max.in.flight.requests.per.connection: 5
     listener:
+      # Consumer 스레드 수 — 파티션 수 이하로 설정
+      # 파티션 3개인 토픽이면 concurrency: 3 으로 설정하여 병렬 소비
       concurrency: 1
 
 # Custom

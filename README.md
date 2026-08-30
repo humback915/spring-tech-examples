@@ -4,7 +4,7 @@
 
 ## 개요
 
-실무에서 자주 사용하는 Spring Boot 기술 스택을 **65개 Java 파일**, **27개 주제**로 정리한 예제 프로젝트입니다.
+실무에서 자주 사용하는 Spring Boot 기술 스택을 **70개 Java 파일**, **28개 주제**로 정리한 예제 프로젝트입니다.
 모든 코드에 한글 주석과 ASCII 다이어그램을 포함하여 개념 이해에 집중했습니다.
 
 ## 기술 스택
@@ -26,7 +26,8 @@
 |---|------|--------|----------|
 | 1 | Reactor Netty + WebClient | `netty` | 커넥션 풀, SSL, Mono/Flux, retry, 동시성 제어 |
 | 2 | Spring Kafka | `kafka` | Producer/Consumer, DLT, Outbox Pattern, 멱등성 |
-| 3 | Redis + Redisson | `redis` | 자료구조, @Cacheable, 분산 락, TTL |
+| 3 | Redis + Redisson | `redis` | 자료구조, @Cacheable, 분산 락, TTL, 캐시 전략 5종, Lua Script, ZPOPMIN+INCRBY |
+| 3-E | PER (Probabilistic Early Recomputation) | `redis` | 확률적 조기 재계산, DB 폴백, Redis Circuit Breaker |
 | 3-B | 로컬 캐시 (Caffeine) | `cache` | Manual/Loading Cache, 멀티 레벨, 캐시 워밍 |
 | 4 | 스케줄링 | `scheduling` | fixedRate, fixedDelay, cron, TaskScheduler |
 | 5 | 트랜잭션 관리 | `transaction` | @Transactional, TransactionTemplate, 전파 수준 (REQUIRED~NESTED) |
@@ -40,7 +41,7 @@
 | 13 | REST API 응답 | `rest` | ResponseEntity, 페이징, ApiResponse 래퍼 |
 | 14 | REST API 클라이언트 | `httpclient` | RestTemplate, RestClient, OpenFeign, Java HttpClient |
 | 15 | Validation | `validation` | @Valid, Bean Validation, 커스텀 Validator |
-| 16 | Exception Handling | `exception` | @RestControllerAdvice, DomainException, AOP 예외 변환 |
+| 16 | Exception Handling | `exception` | @RestControllerAdvice, DomainException, AOP 예외 변환, Checked/Unchecked |
 | 17 | JPA Entity 심화 | `jpa` | BaseEntity, Soft Delete, @Embedded, @FieldDefaults |
 | 18 | JPA Repository + QueryDSL | `jpa` | @Query, Page/Slice, BooleanExpression 동적 쿼리 |
 | 19 | Spring Security | `security` | SecurityFilterChain, JWT, Session + Redis |
@@ -61,7 +62,7 @@
 src/main/java/kr/co/example/
 ├── netty/              ← Reactor Netty + WebClient
 ├── kafka/              ← Spring Kafka (Producer/Consumer/Outbox)
-├── redis/              ← Redis + Redisson 분산 락
+├── redis/              ← Redis + Redisson 분산 락, 캐시 전략, 데이터 구조, PER, DB 폴백
 ├── cache/              ← Caffeine 로컬 캐시
 ├── batch/              ← Spring Batch + JDBC Batch
 ├── scheduling/         ← @Scheduled, cron
@@ -75,7 +76,7 @@ src/main/java/kr/co/example/
 ├── rest/               ← REST API 응답 패턴
 ├── httpclient/         ← REST 클라이언트 (4가지 방식)
 ├── validation/         ← Bean Validation
-├── exception/          ← 예외 처리 (통합/개별/AOP)
+├── exception/          ← 예외 처리 (통합/개별/AOP/Checked·Unchecked)
 ├── jpa/                ← JPA Entity + Repository + QueryDSL
 ├── security/           ← Spring Security + JWT + Session
 ├── aop/                ← AOP + Interceptor
