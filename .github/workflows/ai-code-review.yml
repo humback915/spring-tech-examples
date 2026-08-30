@@ -191,7 +191,7 @@ jobs:
               }
           }).encode("utf-8")
 
-          url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={API_KEY}"
+          url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={API_KEY}"
 
           req = urllib.request.Request(
               url,
