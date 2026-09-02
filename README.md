@@ -4,7 +4,7 @@
 
 ## 개요
 
-실무에서 자주 사용하는 Spring Boot 기술 스택을 **70개 Java 파일**, **28개 주제**로 정리한 예제 프로젝트입니다.
+실무에서 자주 사용하는 Spring Boot 기술 스택을 **69개 Java 파일 + 5개 Nginx 설정**, **29개 주제**로 정리한 예제 프로젝트입니다.
 모든 코드에 한글 주석과 ASCII 다이어그램을 포함하여 개념 이해에 집중했습니다.
 
 ## 기술 스택
@@ -27,8 +27,8 @@
 | 1 | Reactor Netty + WebClient | `netty` | 커넥션 풀, SSL, Mono/Flux, retry, 동시성 제어 |
 | 2 | Spring Kafka | `kafka` | Producer/Consumer, DLT, Outbox Pattern, 멱등성 |
 | 3 | Redis + Redisson | `redis` | 자료구조, @Cacheable, 분산 락, TTL, 캐시 전략 5종, Lua Script, ZPOPMIN+INCRBY |
-| 3-E | PER (Probabilistic Early Recomputation) | `redis` | 확률적 조기 재계산, DB 폴백, Redis Circuit Breaker |
 | 3-B | 로컬 캐시 (Caffeine) | `cache` | Manual/Loading Cache, 멀티 레벨, 캐시 워밍 |
+| 3-E | PER (Probabilistic Early Recomputation) | `redis` | 확률적 조기 재계산, DB 폴백, Redis Circuit Breaker |
 | 4 | 스케줄링 | `scheduling` | fixedRate, fixedDelay, cron, TaskScheduler |
 | 5 | 트랜잭션 관리 | `transaction` | @Transactional, TransactionTemplate, 전파 수준 (REQUIRED~NESTED) |
 | 6 | 스레드 풀 | `thread` | ThreadPoolTaskExecutor, 용도별 분리, 거부 정책 |
@@ -53,12 +53,20 @@
 | 25 | Swagger / OpenAPI | `swagger` | OpenAPI 3.0, @Operation, JWT SecurityScheme |
 | 26 | 파일 업로드 | `file` | MultipartFile, 단일/다중, 파일 검증 |
 | 27 | MapStruct | `mapper` | @Mapper, @Mapping, @MappingTarget |
+| 28 | Nginx 설정 | `infra/nginx` | 리버스 프록시, 로드밸런싱, SSL 종료, 보안 헤더, WebSocket 프록시 |
 
 > 각 주제의 상세 설명은 [TECH_REFERENCE.md](TECH_REFERENCE.md)를 참고하세요.
 
 ## 프로젝트 구조
 
 ```
+infra/nginx/
+├── nginx-reference.conf        ← 리버스 프록시, 정적 파일, Gzip, 타임아웃
+├── upstream-loadbalancing.conf  ← upstream, 로드밸런싱 전략 5종, 헬스체크
+├── ssl-termination.conf         ← SSL/TLS 종료, 인증서, HSTS
+├── security-headers.conf        ← 보안 헤더, CORS, Rate Limiting, IP 제한
+└── websocket-proxy.conf         ← WebSocket Upgrade, STOMP 프록시
+
 src/main/java/kr/co/example/
 ├── netty/              ← Reactor Netty + WebClient
 ├── kafka/              ← Spring Kafka (Producer/Consumer/Outbox)
