@@ -26,7 +26,8 @@
 # ── 제한사항 ──
 #
 # - Gemini 무료 API: 분당 15회, 일 1,500회 요청 제한 (2024년 기준)
-# - diff가 너무 크면 API 입력 토큰 한도 초과 가능 → 앞부분만 잘라서 전송
+# - diff가 너무 크면 API 입력 토큰 한도 초과 가능 → 30,000자까지 잘라서 전송
+# - .md 파일은 리뷰 대상에서 제외 (문서 변경은 코드 리뷰 불필요)
 # - 실무용이 아닌 학습/데모 목적
 #
 # ── 참고 ──
@@ -48,6 +49,7 @@ permissions:
 jobs:
   ai-review:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
 
     steps:
       - name: Checkout repository
@@ -71,7 +73,7 @@ jobs:
         id: diff
         if: steps.check_key.outputs.has_key == 'true'
         run: |
-          DIFF=$(git diff "origin/${{ github.base_ref }}"...HEAD -- '*.java' '*.yml' '*.yaml' '*.gradle' '*.properties' '*.md')
+          DIFF=$(git diff "origin/${{ github.base_ref }}"...HEAD -- '*.java' '*.yml' '*.yaml' '*.gradle' '*.properties')
           if [ -z "$DIFF" ]; then
             echo "has_diff=false" >> "$GITHUB_OUTPUT"
           else
@@ -95,7 +97,7 @@ jobs:
           GITHUB_TOKEN = os.environ["GITHUB_TOKEN"]
           PR_NUMBER = os.environ["PR_NUMBER"]
           REPO = os.environ["REPO_FULL_NAME"]
-          MAX_DIFF_CHARS = 12000
+          MAX_DIFF_CHARS = 30000
 
           # ── diff 읽기 ──
           with open("/tmp/pr_diff.txt", "r") as f:
@@ -201,7 +203,7 @@ jobs:
           )
 
           try:
-              with urllib.request.urlopen(req, timeout=60) as resp:
+              with urllib.request.urlopen(req, timeout=120) as resp:
                   data = json.loads(resp.read().decode("utf-8"))
                   review_text = data["candidates"][0]["content"]["parts"][0]["text"]
                   print(f"Gemini API 호출 성공 ({len(review_text)}자)")
