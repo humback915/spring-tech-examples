@@ -9,10 +9,6 @@
 1. [Reactor Netty + WebClient](#1-reactor-netty--webclient)
 2. [Spring Kafka](#2-spring-kafka)
 3. [Redis + Redisson](#3-redis--redisson)
-    - 3-B. [로컬 캐시 (Caffeine)](#3-b-로컬-캐시-caffeine)
-    - 3-C. [캐시 전략 5종](#3-c-캐시-전략-5종)
-    - 3-D. [데이터 구조 실전 활용](#3-d-데이터-구조-실전-활용)
-    - 3-E. [PER (Probabilistic Early Recomputation)](#3-e-per-probabilistic-early-recomputation)
 4. [스케줄링 (@Scheduled)](#4-스케줄링-scheduled)
 5. [트랜잭션 관리](#5-트랜잭션-관리)
     - 5-B. [트랜잭션 전파 (Propagation)](#5-b-트랜잭션-전파-propagation)
@@ -29,11 +25,6 @@
 10. [WebSocket (STOMP)](#10-websocket-stomp)
 11. [Circuit Breaker](#11-circuit-breaker)
 12. [배치 처리 (Spring Batch / JDBC Batch)](#12-배치-처리)
-    - 12-A. [Spring Batch (Job/Step/Chunk)](#12-a-spring-batch)
-    - 12-B. [JdbcTemplate 배치](#12-b-jdbctemplate-배치)
-    - 12-C. [락 기반 배치](#12-c-락-기반-배치)
-    - 12-D. [버저닝 배치](#12-d-버저닝-배치)
-    - 12-E. [성능 고려 배치](#12-e-성능-고려-배치)
 13. [REST API 응답 (ResponseEntity, 페이징)](#13-rest-api-응답)
 14. [REST API 클라이언트 (호출 방식 비교)](#14-rest-api-클라이언트)
 15. [Validation (입력 검증)](#15-validation)
@@ -44,12 +35,14 @@
 19. [Spring Security (JWT + Session/Redis)](#19-spring-security)
 20. [AOP + Interceptor](#20-aop--interceptor)
 21. [Configuration 관리](#21-configuration-관리)
-22. [Java Core (Optional, Stream, Enum, 함수형)](#22-java-core)
+22. [Java Core (Optional, Stream, Enum, 함수형, 메모리 릭)](#22-java-core)
+    - 22-A. [메모리 릭 (Memory Leak)](#22-a-메모리-릭-memory-leak)
 23. [Lock 개념 (애플리케이션/DB/트랜잭션)](#23-lock-개념)
 24. [Logging (@Slf4j, MDC)](#24-logging)
 25. [Swagger / OpenAPI](#25-swagger--openapi)
 26. [파일 업로드 (MultipartFile)](#26-파일-업로드)
 27. [MapStruct (DTO 매핑)](#27-mapstruct)
+28. [Nginx 설정](#28-nginx-설정)
 
 ---
 
@@ -152,305 +145,22 @@ DB 트랜잭션과 이벤트 발행의 원자성을 보장하는 패턴.
 
 | 항목 | 내용 |
 |------|------|
-| 패키지 | `kr.co.example.redis` |
-| 파일 | `RedisConfig.java`, `RedisStockService.java`, `RedisCacheStrategyService.java`, `RedisDataStructureService.java` |
+| 패키지 | `kr.co.example.redis`, `kr.co.example.cache` |
+| 파일 | `RedisConfig.java`, `RedisStockService.java`, `RedisCacheStrategyService.java`, `RedisDataStructureService.java`, `ProbabilisticEarlyRecomputationService.java`, `LocalCacheConfig.java`, `LocalCacheService.java` |
+| 상세 | **[REDIS_CACHE_GUIDE.md](REDIS_CACHE_GUIDE.md)** |
 
 인메모리 키-값 데이터 스토어. 캐시, 재고 관리, 분산 락 등에 활용한다.
 
-### Template 비교
-
-| Template | Key/Value 타입 | 용도 |
-|----------|---------------|------|
-| `StringRedisTemplate` | String / String | 카운터, 단순 값 |
-| `RedisTemplate<String, Object>` | String / JSON(Object) | 복잡한 객체 저장 |
-
-### 데이터 구조별 활용
-
-| 구조 | 메서드 | 활용 예시 |
-|------|--------|----------|
-| String | `opsForValue()` | 카운터, 단순 캐시 |
-| Hash | `opsForHash()` | 재고 필드별 관리 (total, cart, ordered) |
-| List | `opsForList()` | 큐, 스택 |
-| Set | `opsForSet()` | 중복 제거, 교집합 |
-| Sorted Set | `opsForZSet()` | 리더보드, 대기열 |
-
-### 캐싱 어노테이션
-
-| 어노테이션 | 동작 |
-|-----------|------|
-| `@Cacheable` | 캐시 히트 시 메서드 실행 안 함, 미스 시 실행 후 캐시 저장 |
-| `@CacheEvict` | 캐시 제거 (데이터 변경 시 무효화) |
-| `@CachePut` | 항상 실행 후 캐시 갱신 |
-
-### Redisson 분산 락
-
-Cache Stampede(캐시 만료 시 동시 DB 조회) 방지용.
-
-```
-tryLock(waitTime=3초, leaseTime=5초)
-  → 한 스레드만 DB 조회 → 캐시 저장
-  → 나머지 스레드는 캐시에서 읽기
-```
-
-### 3-B. 로컬 캐시 (Caffeine)
-
-| 항목 | 내용 |
-|------|------|
-| 패키지 | `kr.co.example.cache` |
-| 파일 | `LocalCacheConfig.java`, `LocalCacheService.java` |
-
-JVM 힙 메모리에 데이터를 캐싱하는 방식. 네트워크 호출 없이 나노초 단위의 빠른 응답을 제공한다.
-Caffeine은 Google Guava Cache의 후속 라이브러리로, Window TinyLfu 퇴거 정책으로 높은 히트율을 보장한다.
-
-#### 로컬 캐시 vs 리모트 캐시 (Redis)
-
-| 항목 | 로컬 캐시 (Caffeine) | 리모트 캐시 (Redis) |
-|------|---------------------|-------------------|
-| 저장 위치 | JVM 힙 메모리 | 외부 Redis 서버 |
-| 접근 속도 | ~ns (나노초) | ~ms (네트워크 왕복) |
-| 다중 인스턴스 | 각 인스턴스별 독립 | 모든 인스턴스 공유 |
-| 데이터 일관성 | 불일치 가능 | 항상 일관됨 |
-| 장애 영향 | 앱 재시작 시 소실 | 앱과 독립적 유지 |
-| 직렬화 | 불필요 (객체 참조) | 필요 (JSON 등) |
-
-#### 퇴거 정책 (Eviction Policy)
-
-| 정책 | 설명 |
-|------|------|
-| `maximumSize` | 엔트리 수 초과 시 가장 덜 사용된 항목 퇴거 |
-| `expireAfterWrite` | 쓰기 후 일정 시간 경과 시 만료 |
-| `expireAfterAccess` | 마지막 접근 후 일정 시간 경과 시 만료 |
-| `refreshAfterWrite` | 쓰기 후 일정 시간 지나면 백그라운드 갱신 |
-
-#### 3가지 사용 방식
-
-| 방식 | 설명 |
-|------|------|
-| Spring Cache (`@Cacheable`) | 어노테이션 기반, 가장 간편 |
-| Manual Cache (`Cache<K,V>`) | 직접 put/get/invalidate, 세밀한 제어 |
-| LoadingCache | 캐시 미스 시 자동 로딩, Stampede 방지 내장 |
-
-#### 캐시 관련 주요 문제
-
-| 문제 | 증상 | 해결 |
-|------|------|------|
-| Cache Stampede | 만료 시점에 다수 요청이 동시 DB 조회 | LoadingCache 또는 분산 락 |
-| Cache Penetration | 존재하지 않는 데이터 반복 조회 | null 캐싱 (allowNullValues) |
-| Cache Inconsistency | DB 갱신 후 캐시에 이전 값 남음 | @CacheEvict 또는 TTL 설정 |
-
-#### 멀티 레벨 캐시 (L1 + L2)
-
-```
-요청 → [L1: Caffeine] → 히트? → 반환 (~ns)
-              ↓ 미스
-       [L2: Redis]    → 히트? → L1에 저장 → 반환 (~ms)
-              ↓ 미스
-       [DB 조회]      → L2 저장 → L1 저장 → 반환
-```
-
-#### 캐시 워밍 (Cache Warming)
-
-앱 시작 직후 캐시가 비어있는 Cold Start 문제를 방지.
-`@PostConstruct`에서 자주 사용되는 데이터를 미리 로딩하여 시작 직후부터 높은 히트율 유지.
-
-### 3-C. 캐시 전략 5종
-
-| 항목 | 내용 |
-|------|------|
-| 패키지 | `kr.co.example.redis` |
-| 파일 | `RedisCacheStrategyService.java` |
-
-캐시와 DB 간 데이터 동기화 방식에 따른 5가지 전략 패턴.
-
-#### 전략 비교
-
-| 전략 | 읽기 성능 | 쓰기 성능 | 일관성 | 구현 복잡도 |
-|------|----------|----------|--------|-----------|
-| Cache-Aside | 높음 | 보통 | 캐시 미스 시 최신 | 낮음 |
-| Read-Through | 높음 | 보통 | 캐시 계층이 자동 로딩 | 보통 |
-| Write-Through | 높음 | 낮음 | 항상 일관 (동기 쓰기) | 보통 |
-| Write-Behind | 높음 | 높음 | 지연 쓰기로 불일치 가능 | 높음 |
-| Write-Around | 보통 | 높음 | 첫 읽기 시 캐시 미스 | 낮음 |
-
-#### 전략별 동작 흐름
-
-```
-[Cache-Aside]  읽기: App → Cache? → 미스 → DB → Cache 저장
-               쓰기: App → DB 저장 → Cache 삭제
-
-[Read-Through] 읽기: App → Cache? → 미스 → Cache가 DB 로딩 → 반환
-
-[Write-Through] 쓰기: App → Cache 저장 → Cache가 DB 동기 저장
-
-[Write-Behind]  쓰기: App → Cache 저장 → 버퍼 적재 → 비동기 DB 배치 쓰기
-
-[Write-Around]  쓰기: App → DB 직접 저장 (Cache 무시)
-                읽기: Cache 미스 시 DB → Cache 저장
-```
-
-#### 선택 가이드
-
-| 상황 | 권장 전략 |
+| 주제 | 핵심 내용 |
 |------|----------|
-| 읽기 빈번, 쓰기 드묾 | Cache-Aside / Read-Through |
-| 읽기/쓰기 모두 빈번 | Write-Behind |
-| 데이터 일관성 중요 | Write-Through |
-| 쓰기 후 즉시 읽기 드묾 | Write-Around |
-| 범용 (가장 일반적) | Cache-Aside |
-
-### 3-D. 데이터 구조 실전 활용
-
-| 항목 | 내용 |
-|------|------|
-| 패키지 | `kr.co.example.redis` |
-| 파일 | `RedisDataStructureService.java` |
-
-String, Hash, Set 자료구조의 실전 활용법과 Lua Script를 이용한 원자적 연산 예제.
-
-#### Spring 메서드 → Redis 명령 매핑
-
-| 구조 | Spring 메서드 | Redis 명령 | 활용 |
-|------|-------------|-----------|------|
-| String | `opsForValue().set()` | `SET` | 단순 캐시, 세션 |
-| String | `opsForValue().increment()` | `INCR` | 카운터 |
-| String | `opsForValue().setIfAbsent()` | `SETNX` | 간이 분산 락 |
-| String | `opsForValue().multiGet()` | `MGET` | 일괄 조회 |
-| Hash | `opsForHash().put()` | `HSET` | 객체 필드별 저장 |
-| Hash | `opsForHash().entries()` | `HGETALL` | 전체 필드 조회 |
-| Hash | `opsForHash().increment()` | `HINCRBY` | 필드별 카운터 |
-| Set | `opsForSet().add()` | `SADD` | 태그, 관심사 |
-| Set | `opsForSet().intersect()` | `SINTER` | 공통 관심사 |
-| Set | `opsForSet().randomMember()` | `SRANDMEMBER` | 랜덤 추첨 |
-
-#### Lua Script 원자적 연산
-
-여러 Redis 명령을 서버 측에서 하나의 원자적 단위로 실행. Race Condition 방지에 활용.
-
-| 패턴 | 동작 | 반환 |
-|------|------|------|
-| 재고 차감 | GET → 비교 → DECRBY | 남은 수량 (-1: 부족) |
-| Rate Limiter | GET → 비교 → INCR + EXPIRE | 1: 허용, 0: 거부 |
-
-Spring에서는 `DefaultRedisScript<Long>`에 Lua 스크립트를 전달하고, `StringRedisTemplate.execute()`로 실행한다.
-Java 21 text block(`"""`)으로 스크립트를 가독성 있게 작성할 수 있다.
-
-#### Lua ZPOPMIN + INCRBY (대기열 소비 + 카운터)
-
-대기열(Sorted Set)에서 항목을 꺼내면서 처리 카운터를 원자적으로 갱신하는 패턴.
-
-```
-[Sorted Set: 대기열]         [String: 카운터]
-│ score │ member     │       │ counter: 47     │
-│   1   │ order:101  │  →    │ counter: 50 (+3)│
-│   2   │ order:102  │       └─────────────────┘
-│   3   │ order:103  │
-└───────┴────────────┘
-      ↑ 3개 ZPOPMIN
-```
-
-| 변형 | 동작 | 반환 |
-|------|------|------|
-| ZPOPMIN + INCRBY | 꺼내기 + 카운터 증가 | 꺼낸 멤버 목록 |
-| ZPOPMIN + INCRBY + HSET | 꺼내기 + 카운터 + 이력 기록 | 꺼낸 개수 |
-
-### 3-E. PER (Probabilistic Early Recomputation)
-
-| 항목 | 내용 |
-|------|------|
-| 패키지 | `kr.co.example.redis` |
-| 파일 | `ProbabilisticEarlyRecomputationService.java` |
-
-Cache Stampede를 확률적으로 방지하는 조기 재계산 알고리즘.
-2015년 논문 "Optimal Probabilistic Cache Stampede Prevention"에서 제안. XFetch로도 알려져 있다.
-
-#### 기존 TTL 방식의 문제
-
-```
-캐시 SET ────────── TTL 만료
-                       │
-                  ┌────┼────┐
-               요청1  요청2  요청3  ← 동시 캐시 미스
-                  │    │    │
-                  DB   DB   DB       ← 중복 DB 조회 (Stampede)
-```
-
-#### PER 알고리즘의 해결
-
-TTL 만료 **전에** 확률적으로 캐시를 미리 갱신한다.
-
-```
-캐시 SET ─── 확률적 갱신 구간 ── TTL 만료
-                │
-             요청 A가 확률 판단 → 조기 갱신 (DB 1회)
-                                   ← 다른 요청은 캐시 히트
-```
-
-#### 핵심 수식
-
-```
-currentTime - (delta * beta * ln(random())) > expiry
-```
-
-| 변수 | 설명 |
-|------|------|
-| `delta` | 재계산 소요 시간 (DB 조회 시간) |
-| `beta` | 튜닝 파라미터 (1.0 = 논문 최적값) |
-| `ln(random())` | (0,1) 균등 분포의 자연 로그 (항상 음수) |
-| `expiry` | 캐시 만료 시각 |
-
-- 만료까지 남은 시간이 짧을수록 → 재계산 확률 증가
-- delta(재계산 비용)가 클수록 → 더 일찍 재계산 시도
-- beta가 클수록 → 재계산 빈도 증가
-
-#### PER vs 다른 Stampede 방지 기법
-
-| 기법 | 추가 인프라 | 동시성 | 특징 |
-|------|-----------|--------|------|
-| 분산 락 (Redisson) | Redis | 1개 통과 | 락 경합, 대기 시간 |
-| LoadingCache | 없음 | 1개 통과 | 단일 JVM 한정 |
-| **PER** | **없음** | **확률적** | **락 없이 자연스러운 갱신** |
-| TTL Jitter | 없음 | 분산 | 만료 시점만 분산 |
-
-#### 구현 변형
-
-| 변형 | 키 수 | 특징 |
-|------|-------|------|
-| 기본 (메타데이터 분리) | 3개 | 값, 만료 시각, delta 각각 저장 |
-| Compact (단일 키) | 1개 | `value\|expiry\|delta` 형태로 압축 |
-| PER + TTL Jitter | 1개 | TTL에 ±20% 랜덤 편차 추가 |
-
-#### Redis SPOF 방지 — DB 폴백
-
-Redis 장애 시 전체 서비스가 중단되지 않도록 DB 직접 조회로 자동 전환.
-
-```
-[정상]  요청 → Redis(PER) → 히트 → 반환
-                             ↓ 미스
-                            DB → Redis 저장 → 반환
-
-[장애]  요청 → Redis → 예외!
-                        ↓ catch
-                       DB 직접 조회 → 반환 (Redis 저장 생략)
-```
-
-| 전략 | 설명 |
-|------|------|
-| try-catch 폴백 | Redis 예외 시 DB 직접 조회 |
-| Circuit Breaker | 연속 실패 N회 → DB만 사용 (냉각 후 Redis 재시도) |
-| best-effort 복구 | DB 조회 후 Redis 저장 시도 (실패 무시) |
-| Redis Sentinel/Cluster | 인프라 레벨 HA (자동 페일오버) |
-
-#### Redis Circuit Breaker 상태 전이
-
-```
-CLOSED ──(연속 실패 5회)──→ OPEN
-(Redis PER 정상)           (Redis 차단, DB만 사용)
-  ↑                           │
-  │                    30초 냉각
-  │                           ↓
-  └───(성공)──── HALF_OPEN ───(실패)──→ OPEN
-                (Redis 시험 1회)
-```
+| Template | StringRedisTemplate (단순), RedisTemplate (객체) |
+| 데이터 구조 | String, Hash, List, Set, Sorted Set + Lua Script |
+| 캐싱 어노테이션 | @Cacheable, @CacheEvict, @CachePut |
+| 분산 락 | Redisson tryLock — Cache Stampede 방지 |
+| 로컬 캐시 | Caffeine — maximumSize, expireAfterWrite, 멀티 레벨 캐시 |
+| 캐시 전략 5종 | Cache-Aside, Read/Write-Through, Write-Behind, Write-Around |
+| PER 알고리즘 | 확률적 조기 재계산으로 Stampede 방지 (락 없음) |
+| Redis 장애 대응 | DB 폴백, Circuit Breaker, Sentinel/Cluster |
 
 ---
 
@@ -854,31 +564,17 @@ Order.builder()
 |------|------|
 | 패키지 | `kr.co.example.websocket` |
 | 파일 | `WebSocketConfig.java`, `NotificationController.java` |
+| 인프라 | `infra/nginx/websocket-proxy.conf` |
+| 상세 | **[WEBSOCKET_GUIDE.md](WEBSOCKET_GUIDE.md)** |
 
 클라이언트-서버 간 양방향 실시간 통신. STOMP 프로토콜로 Pub/Sub 메시징 제공.
 
-### HTTP vs WebSocket
-
-| 항목 | HTTP | WebSocket |
-|------|------|-----------|
-| 통신 방향 | 단방향 (요청-응답) | 양방향 |
-| 연결 | 매 요청마다 수립/해제 | 유지 (persistent) |
-| 서버 push | 불가 | 가능 |
-
-### STOMP 목적지 규칙
-
-| 접두사 | 방향 | 용도 |
-|--------|------|------|
-| `/topic/*` | 서버 → 클라이언트 (1:N) | 브로드캐스트 |
-| `/queue/*` | 서버 → 클라이언트 (1:1) | 개인 메시지 |
-| `/app/*` | 클라이언트 → 서버 | @MessageMapping 핸들러로 라우팅 |
-
-### 서버 전송 방법
-
-| 메서드 | 대상 |
-|--------|------|
-| `convertAndSend(dest, payload)` | 구독자 전체 |
-| `convertAndSendToUser(user, dest, payload)` | 특정 사용자 |
+| 주제 | 핵심 내용 |
+|------|----------|
+| STOMP 목적지 | `/app/*` (클라이언트→서버), `/topic/*` (1:N), `/queue/*` (1:1) |
+| 메시지 전송 | @MessageMapping + @SendTo, SimpMessagingTemplate |
+| SockJS | WebSocket 미지원 환경에서 XHR Streaming/Polling 폴백 |
+| Nginx 프록시 | Upgrade/Connection 헤더 전달, proxy_read_timeout 설정 |
 
 ---
 
@@ -888,33 +584,16 @@ Order.builder()
 |------|------|
 | 패키지 | `kr.co.example.circuitbreaker` |
 | 파일 | `SimpleCircuitBreaker.java` |
+| 상세 | **[CIRCUIT_BREAKER_GUIDE.md](CIRCUIT_BREAKER_GUIDE.md)** |
 
 외부 서비스 호출 실패가 반복될 때 추가 호출을 차단하여 연쇄 장애를 방지하는 패턴.
 
-### 상태 전이
-
-```
-CLOSED ──(연속 실패 5회)──→ OPEN
-(정상)                      (차단)
-  ↑                           │
-  │                    30초 경과
-  │                           ↓
-  └───(성공)──── HALF_OPEN ───(실패)──→ OPEN
-                (시험 허용)
-```
-
-| 상태 | 동작 |
-|------|------|
-| `CLOSED` | 모든 요청 통과, 실패 카운트 |
-| `OPEN` | 모든 요청 즉시 거부 (폴백 실행) |
-| `HALF_OPEN` | 제한된 요청 허용하여 복구 확인 |
-
-### 핵심 설정값
-
-| 설정 | 값 | 설명 |
-|------|----|------|
-| `FAILURE_THRESHOLD` | 5 | OPEN 전환 연속 실패 횟수 |
-| `TIMEOUT_SECONDS` | 30 | OPEN → HALF_OPEN 대기 시간 |
+| 주제 | 핵심 내용 |
+|------|----------|
+| 상태 전이 | CLOSED →(실패 5회)→ OPEN →(30초)→ HALF_OPEN →(성공)→ CLOSED |
+| execute() | action(외부 호출) + fallback(대체값)을 Supplier로 수신 |
+| 스레드 안전성 | AtomicReference(상태), AtomicInteger(카운터), volatile(시간) |
+| 실무 | 수동 구현 학습용, 운영에서는 Resilience4j 권장 |
 
 ---
 
@@ -924,171 +603,17 @@ CLOSED ──(연속 실패 5회)──→ OPEN
 |------|------|
 | 패키지 | `kr.co.example.batch` |
 | 파일 | `SpringBatchConfig.java`, `JdbcBatchService.java`, `LockBasedBatchService.java`, `VersionedBatchService.java`, `PerformanceAwareBatchService.java` |
+| 상세 | **[BATCH_GUIDE.md](BATCH_GUIDE.md)** |
 
-대용량 데이터를 안정적으로 처리하기 위한 배치 기법 모음. Spring Batch 프레임워크, JdbcTemplate 배치, 분산 락, 낙관적/비관적 락, 성능 최적화를 다룬다.
+대용량 데이터를 안정적으로 처리하기 위한 배치 기법 모음.
 
-### application.yml 배치 설정
-
-| 설정 | 값 | 설명 |
-|------|----|------|
-| `spring.batch.job.enabled` | `false` | 앱 시작 시 Job 자동 실행 비활성화 |
-| `spring.batch.jdbc.initialize-schema` | `always` | 메타데이터 테이블 자동 생성 |
-| `hibernate.jdbc.batch_size` | `100` | Hibernate JDBC 배치 크기 |
-| `hibernate.order_inserts` | `true` | INSERT 정렬하여 배치 효율 향상 |
-| `hibernate.jdbc.batch_versioned_data` | `true` | @Version 엔티티도 배치 가능 |
-
-### 12-A. Spring Batch
-
-| 항목 | 내용 |
-|------|------|
-| 파일 | `SpringBatchConfig.java` |
-
-Spring Batch 프레임워크의 Job → Step → Chunk/Tasklet 구조.
-
-#### Tasklet vs Chunk
-
-| 항목 | Tasklet | Chunk |
-|------|---------|-------|
-| 구조 | 단일 execute() | Reader → Processor → Writer |
-| 트랜잭션 | execute() 전체 1TX | chunk 단위 커밋 |
-| 적합한 작업 | 테이블 초기화, 파일 삭제 | 대량 데이터 변환/이관 |
-| 재시작 | 처음부터 | 마지막 커밋 지점부터 |
-
-#### Chunk 처리 흐름
-
-```
-Reader → 1건 읽기 × N회
-  ↓
-Processor → 1건씩 변환 × N회
-  ↓
-Writer → N건 일괄 쓰기 (1회)
-  ↓
-TX COMMIT → Reader가 null 반환할 때까지 반복
-```
-
-#### Reader 구현체
-
-| 구현체 | 메모리 | 커넥션 | 대용량 적합도 |
-|--------|--------|--------|-------------|
-| JdbcCursorItemReader | 1건씩 (효율적) | Step 동안 유지 | 적합 |
-| JdbcPagingItemReader | 페이지 크기 | 짧게 사용 | OFFSET 커지면 느림 |
-| ListItemReader | 전체 로딩 | 불필요 | 부적합 |
-
-### 12-B. JdbcTemplate 배치
-
-| 항목 | 내용 |
-|------|------|
-| 파일 | `JdbcBatchService.java` |
-
-JPA 영속성 컨텍스트를 우회하여 대량 데이터를 빠르게 처리.
-
-#### JPA vs JdbcTemplate 배치 성능 (10만 건 INSERT)
-
-| 방식 | 소요 시간 | 메모리 |
-|------|----------|--------|
-| JPA saveAll() (배치 X) | ~60초 | 높음 |
-| JPA saveAll() (배치 O) | ~20초 | 높음 |
-| JdbcTemplate batchUpdate | ~5초 | 낮음 |
-| JDBC executeBatch() | ~3초 | 매우 낮음 |
-
-#### 주요 패턴
-
-| 패턴 | 설명 |
-|------|------|
-| batchUpdate (전체) | 리스트 전체를 1회 executeBatch |
-| 청크 단위 배치 | N건씩 분할 처리 (메모리 제어) |
-| 실패 격리 배치 | 레코드별 독립 처리, 1건 실패해도 계속 |
-| UPSERT 배치 | ON DUPLICATE KEY UPDATE |
-
-### 12-C. 락 기반 배치
-
-| 항목 | 내용 |
-|------|------|
-| 파일 | `LockBasedBatchService.java` |
-
-다중 서버 환경에서 배치 중복 실행을 방지하는 분산 락 전략.
-
-#### 3가지 락 전략
-
-| 전략 | 범위 | 인프라 | 적합 환경 |
-|------|------|--------|----------|
-| AtomicBoolean | 단일 JVM | 없음 | 단일 서버 |
-| MySQL GET_LOCK | 같은 DB | MySQL | DB 기반 멀티 서버 |
-| Redisson RLock | 전체 | Redis | 대규모 클러스터 |
-
-#### 권장: 2계층 락 구조
-
-```
-1계층: AtomicBoolean (같은 JVM, 비용 제로)
-  ↓ 통과
-2계층: 분산 락 (Redis/MySQL, 네트워크 1회)
-  ↓ 획득 성공
-배치 실행
-```
-
-### 12-D. 버저닝 배치
-
-| 항목 | 내용 |
-|------|------|
-| 파일 | `VersionedBatchService.java` |
-
-배치와 실시간 API가 같은 데이터를 수정할 때의 동시성 제어.
-
-#### 낙관적 락 vs 비관적 락
-
-| 항목 | 낙관적 락 | 비관적 락 |
-|------|----------|----------|
-| 방식 | UPDATE 시 version 체크 | SELECT FOR UPDATE |
-| 락 점유 | 없음 | TX 종료까지 |
-| 충돌 처리 | 재시도/건너뛰기 | 대기/타임아웃 |
-| 데드락 | 없음 | 발생 가능 |
-| 배치 적합도 | 적합 | 소량만 적합 |
-
-#### 주요 패턴
-
-| 패턴 | 설명 |
-|------|------|
-| version 체크 UPDATE | WHERE version=? (충돌 시 affected=0) |
-| 충돌 시 재시도 | 최신 version 재조회 후 UPDATE |
-| SELECT FOR UPDATE SKIP LOCKED | 잠긴 행 건너뛰기 (워커 분담) |
-| CAS 상태 전이 | WHERE status='PENDING' (version 없이) |
-
-### 12-E. 성능 고려 배치
-
-| 항목 | 내용 |
-|------|------|
-| 파일 | `PerformanceAwareBatchService.java` |
-
-메모리, CPU, I/O 병목을 고려한 배치 최적화 기법.
-
-#### 배치 성능 병목 3대 요소
-
-| 요소 | 원인 | 해결 |
-|------|------|------|
-| 메모리 | 대량 데이터 일괄 로딩, 영속성 컨텍스트 | 페이징, 스트리밍, JdbcTemplate |
-| CPU | 더티 체킹, 복잡한 변환 로직 | 병렬 처리, JdbcTemplate |
-| I/O | 건별 INSERT, N+1 쿼리 | 배치 INSERT, JOIN FETCH |
-
-#### 주요 패턴
-
-| 패턴 | 메모리 | 속도 | 설명 |
-|------|--------|------|------|
-| Keyset Pagination | 일정 | 빠름 | OFFSET 없이 id 기반 페이징 |
-| 병렬 파티셔닝 | 낮음 | 매우 빠름 | ID 범위 분할 → 스레드별 독립 처리 |
-| queryForStream | 최소 | 보통 | 1건씩 스트리밍 (대용량) |
-| 메모리 모니터링 | - | - | Runtime.getRuntime() 사용량 추적 |
-
-#### OFFSET vs Keyset Pagination
-
-```
-OFFSET:
-  page 1: LIMIT 1000 OFFSET 0      → 빠름
-  page 100: LIMIT 1000 OFFSET 99000 → 느림 (9.9만 건 스캔)
-
-Keyset:
-  page 1: WHERE id > 0 LIMIT 1000           → 빠름
-  page 100: WHERE id > 99000 LIMIT 1000     → 똑같이 빠름 (인덱스 직접 접근)
-```
+| 주제 | 핵심 내용 |
+|------|----------|
+| Spring Batch | Job → Step → Chunk(Reader/Processor/Writer) / Tasklet |
+| JdbcTemplate 배치 | batchUpdate, 청크 분할, UPSERT — JPA 대비 10배+ 빠름 |
+| 락 기반 배치 | AtomicBoolean + 분산 락(Redis/MySQL) 2계층 구조 |
+| 버저닝 배치 | 낙관적 락(version), 비관적 락(FOR UPDATE SKIP LOCKED) |
+| 성능 최적화 | Keyset Pagination, 병렬 파티셔닝, queryForStream |
 
 ---
 
@@ -1379,7 +904,7 @@ Redis에 세션을 저장하여 분산 환경에서 세션 공유. `@EnableRedis
 | 항목 | 내용 |
 |------|------|
 | 패키지 | `kr.co.example.javacore` |
-| 파일 | `OptionalExample.java`, `StreamApiExample.java`, `EnumExample.java`, `FunctionalInterfaceExample.java` |
+| 파일 | `OptionalExample.java`, `StreamApiExample.java`, `EnumExample.java`, `FunctionalInterfaceExample.java`, `MemoryLeakExample.java` |
 
 | 주제 | 핵심 내용 |
 |------|----------|
@@ -1387,6 +912,27 @@ Redis에 세션을 저장하여 분산 환경에서 세션 공유. `@EnableRedis
 | Stream API | filter, map, collect(groupingBy), reduce, flatMap |
 | Enum | 코드+한글 매핑, 상태 전이, 전략 패턴, 그룹핑 |
 | Functional Interface | Function, Consumer, Predicate, Supplier, 메서드 레퍼런스 |
+| Memory Leak | static 컬렉션, 리소스 미반환, ThreadLocal, JPA 영속성 컨텍스트 |
+
+### 22-A. 메모리 릭 (Memory Leak)
+
+| 항목 | 내용 |
+|------|------|
+| 파일 | `MemoryLeakExample.java` |
+| 상세 | **[MEMORY_LEAK_GUIDE.md](MEMORY_LEAK_GUIDE.md)** |
+
+더 이상 사용하지 않는 객체가 GC에 의해 회수되지 못하고 힙 메모리에 계속 남아있는 현상.
+
+| # | 패턴 | 해결 |
+|---|------|------|
+| 1 | static 컬렉션 무한 추가 | 크기 제한, WeakHashMap, Caffeine |
+| 2 | 리소스 미반환 (Stream, Connection) | try-with-resources |
+| 3 | Map 제거 누락 | 생명주기에 맞춰 remove |
+| 4 | 리스너 해제 누락 | @EventListener 또는 수동 해제 |
+| 5 | 내부 클래스 외부 참조 | static 내부 클래스 사용 |
+| 6 | ThreadLocal 미정리 | finally에서 remove() |
+| 7 | JPA 영속성 컨텍스트 비대화 | 청크 단위 clear(), JdbcTemplate |
+| 8 | String 반복 연결 | StringBuilder |
 
 ---
 
@@ -1465,6 +1011,27 @@ MultipartFile 단일/다중 업로드, 파일+JSON 동시 수신, 확장자/크�
 
 ---
 
+## 28. Nginx 설정
+
+| 항목 | 내용 |
+|------|------|
+| 디렉토리 | `infra/nginx/` |
+| 파일 | `nginx-reference.conf`, `upstream-loadbalancing.conf`, `ssl-termination.conf`, `security-headers.conf`, `websocket-proxy.conf` |
+| 상세 | **[NGINX_GUIDE.md](NGINX_GUIDE.md)** |
+
+Spring Boot 앱 앞단의 Nginx 인프라 설정 레퍼런스.
+
+| 주제 | 핵심 내용 |
+|------|----------|
+| 리버스 프록시 | Host, X-Real-IP, X-Forwarded-For 헤더 전달 |
+| 로드밸런싱 | round-robin, least_conn, ip_hash, hash, random |
+| SSL/TLS 종료 | TLS 1.2/1.3, Let's Encrypt, HSTS, OCSP 스테이플링 |
+| 보안 헤더 | CSP, X-Frame-Options, CORS, Rate Limiting |
+| WebSocket 프록시 | Upgrade/Connection 헤더, proxy_read_timeout, SockJS 폴백 |
+| 배포 패턴 | Blue-Green (전체 전환), Canary (weight 기반 점진적) |
+
+---
+
 ## 프로젝트 구조
 
 ```
@@ -1472,6 +1039,12 @@ spring-tech-examples/
 ├── build.gradle
 ├── settings.gradle
 ├── TECH_REFERENCE.md                            ← 이 파일
+├── infra/nginx/
+│   ├── nginx-reference.conf                     ← 리버스 프록시, 정적 파일, Gzip, 타임아웃
+│   ├── upstream-loadbalancing.conf              ← upstream, 로드밸런싱 전략 5종, 헬스체크
+│   ├── ssl-termination.conf                     ← SSL/TLS 종료, 인증서, HSTS
+│   ├── security-headers.conf                    ← 보안 헤더, CORS, Rate Limiting, IP 제한
+│   └── websocket-proxy.conf                     ← WebSocket Upgrade, STOMP 프록시
 ├── src/main/resources/application.yml
 └── src/main/java/kr/co/example/
     ├── netty/
@@ -1559,7 +1132,8 @@ spring-tech-examples/
     │   ├── OptionalExample.java                 ← orElseThrow, map, flatMap, 안티패턴
     │   ├── StreamApiExample.java                ← filter, map, collect, groupingBy, flatMap
     │   ├── EnumExample.java                     ← 상태 전이, 전략 패턴, 코드 테이블
-    │   └── FunctionalInterfaceExample.java      ← Function, Consumer, Predicate, Supplier
+    │   ├── FunctionalInterfaceExample.java      ← Function, Consumer, Predicate, Supplier
+    │   └── MemoryLeakExample.java              ← 메모리 릭 발생 패턴 8종, 방지 방법
     ├── lock/
     │   └── LockConceptExample.java              ← synchronized, ReentrantLock, FOR UPDATE, 격리수준
     ├── logging/
