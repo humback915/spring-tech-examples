@@ -43,6 +43,7 @@
 26. [파일 업로드 (MultipartFile)](#26-파일-업로드)
 27. [MapStruct (DTO 매핑)](#27-mapstruct)
 28. [Nginx 설정](#28-nginx-설정)
+29. [AI 코드 리뷰 자동화](#29-ai-코드-리뷰-자동화)
 
 ---
 
@@ -147,7 +148,7 @@ DB 트랜잭션과 이벤트 발행의 원자성을 보장하는 패턴.
 |------|------|
 | 패키지 | `kr.co.example.redis`, `kr.co.example.cache` |
 | 파일 | `RedisConfig.java`, `RedisStockService.java`, `RedisCacheStrategyService.java`, `RedisDataStructureService.java`, `ProbabilisticEarlyRecomputationService.java`, `LocalCacheConfig.java`, `LocalCacheService.java` |
-| 상세 | **[REDIS_CACHE_GUIDE.md](REDIS_CACHE_GUIDE.md)** |
+| 상세 | **[REDIS_CACHE_GUIDE.md](docs/REDIS_CACHE_GUIDE.md)** |
 
 인메모리 키-값 데이터 스토어. 캐시, 재고 관리, 분산 락 등에 활용한다.
 
@@ -565,7 +566,7 @@ Order.builder()
 | 패키지 | `kr.co.example.websocket` |
 | 파일 | `WebSocketConfig.java`, `NotificationController.java` |
 | 인프라 | `infra/nginx/websocket-proxy.conf` |
-| 상세 | **[WEBSOCKET_GUIDE.md](WEBSOCKET_GUIDE.md)** |
+| 상세 | **[WEBSOCKET_GUIDE.md](docs/WEBSOCKET_GUIDE.md)** |
 
 클라이언트-서버 간 양방향 실시간 통신. STOMP 프로토콜로 Pub/Sub 메시징 제공.
 
@@ -584,7 +585,7 @@ Order.builder()
 |------|------|
 | 패키지 | `kr.co.example.circuitbreaker` |
 | 파일 | `SimpleCircuitBreaker.java` |
-| 상세 | **[CIRCUIT_BREAKER_GUIDE.md](CIRCUIT_BREAKER_GUIDE.md)** |
+| 상세 | **[CIRCUIT_BREAKER_GUIDE.md](docs/CIRCUIT_BREAKER_GUIDE.md)** |
 
 외부 서비스 호출 실패가 반복될 때 추가 호출을 차단하여 연쇄 장애를 방지하는 패턴.
 
@@ -603,7 +604,7 @@ Order.builder()
 |------|------|
 | 패키지 | `kr.co.example.batch` |
 | 파일 | `SpringBatchConfig.java`, `JdbcBatchService.java`, `LockBasedBatchService.java`, `VersionedBatchService.java`, `PerformanceAwareBatchService.java` |
-| 상세 | **[BATCH_GUIDE.md](BATCH_GUIDE.md)** |
+| 상세 | **[BATCH_GUIDE.md](docs/BATCH_GUIDE.md)** |
 
 대용량 데이터를 안정적으로 처리하기 위한 배치 기법 모음.
 
@@ -919,7 +920,7 @@ Redis에 세션을 저장하여 분산 환경에서 세션 공유. `@EnableRedis
 | 항목 | 내용 |
 |------|------|
 | 파일 | `MemoryLeakExample.java` |
-| 상세 | **[MEMORY_LEAK_GUIDE.md](MEMORY_LEAK_GUIDE.md)** |
+| 상세 | **[MEMORY_LEAK_GUIDE.md](docs/MEMORY_LEAK_GUIDE.md)** |
 
 더 이상 사용하지 않는 객체가 GC에 의해 회수되지 못하고 힙 메모리에 계속 남아있는 현상.
 
@@ -1017,7 +1018,7 @@ MultipartFile 단일/다중 업로드, 파일+JSON 동시 수신, 확장자/크�
 |------|------|
 | 디렉토리 | `infra/nginx/` |
 | 파일 | `nginx-reference.conf`, `upstream-loadbalancing.conf`, `ssl-termination.conf`, `security-headers.conf`, `websocket-proxy.conf` |
-| 상세 | **[NGINX_GUIDE.md](NGINX_GUIDE.md)** |
+| 상세 | **[NGINX_GUIDE.md](docs/NGINX_GUIDE.md)** |
 
 Spring Boot 앱 앞단의 Nginx 인프라 설정 레퍼런스.
 
@@ -1032,6 +1033,24 @@ Spring Boot 앱 앞단의 Nginx 인프라 설정 레퍼런스.
 
 ---
 
+## 29. AI 코드 리뷰 자동화
+
+| 항목 | 내용 |
+|------|------|
+| 파일 | `.github/workflows/ai-code-review.yml` |
+| 상세 | **[AI_CODE_REVIEW_GUIDE.md](docs/AI_CODE_REVIEW_GUIDE.md)** |
+
+GitHub PR 생성 시 AI(Gemini)가 자동으로 코드 리뷰 코멘트를 작성하는 워크플로우.
+
+| 주제 | 핵심 내용 |
+|------|----------|
+| 트리거 | PR 생성/업데이트 시 GitHub Actions 자동 실행 |
+| 동작 흐름 | git diff → Gemini API → PR 코멘트 게시 |
+| API | Google Gemini 무료 API |
+| 설정 | GitHub Secrets에 API Key 등록 |
+
+---
+
 ## 프로젝트 구조
 
 ```
@@ -1039,6 +1058,14 @@ spring-tech-examples/
 ├── build.gradle
 ├── settings.gradle
 ├── TECH_REFERENCE.md                            ← 이 파일
+├── docs/
+│   ├── AI_CODE_REVIEW_GUIDE.md                  ← AI 코드 리뷰 자동화 가이드
+│   ├── BATCH_GUIDE.md                           ← 배치 처리 상세 가이드
+│   ├── CIRCUIT_BREAKER_GUIDE.md                 ← Circuit Breaker 상세 가이드
+│   ├── MEMORY_LEAK_GUIDE.md                     ← 메모리 릭 상세 가이드
+│   ├── NGINX_GUIDE.md                           ← Nginx 설정 상세 가이드
+│   ├── REDIS_CACHE_GUIDE.md                     ← Redis 캐시 상세 가이드
+│   └── WEBSOCKET_GUIDE.md                       ← WebSocket 상세 가이드
 ├── infra/nginx/
 │   ├── nginx-reference.conf                     ← 리버스 프록시, 정적 파일, Gzip, 타임아웃
 │   ├── upstream-loadbalancing.conf              ← upstream, 로드밸런싱 전략 5종, 헬스체크

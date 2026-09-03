@@ -55,11 +55,33 @@
 | 27 | MapStruct | `mapper` | @Mapper, @Mapping, @MappingTarget |
 | 28 | Nginx 설정 | `infra/nginx` | 리버스 프록시, 로드밸런싱, SSL 종료, 보안 헤더, WebSocket 프록시 |
 
-> 각 주제의 상세 설명은 [TECH_REFERENCE.md](TECH_REFERENCE.md)를 참고하세요.
+> 각 주제의 상세 설명은 **[TECH_REFERENCE.md](TECH_REFERENCE.md)** 를 참고하세요.
+
+## 상세 가이드
+
+| 가이드 | 설명 |
+|--------|------|
+| **[TECH_REFERENCE.md](TECH_REFERENCE.md)** | 전체 기술 레퍼런스 (29개 주제 통합) |
+| [REDIS_CACHE_GUIDE.md](docs/REDIS_CACHE_GUIDE.md) | Redis 캐시 전략, PER 알고리즘, Lua Script |
+| [BATCH_GUIDE.md](docs/BATCH_GUIDE.md) | Spring Batch, JDBC Batch, 락/버저닝/성능 최적화 |
+| [CIRCUIT_BREAKER_GUIDE.md](docs/CIRCUIT_BREAKER_GUIDE.md) | Circuit Breaker 상태 전이, 수동 구현 |
+| [WEBSOCKET_GUIDE.md](docs/WEBSOCKET_GUIDE.md) | WebSocket STOMP, SockJS, Nginx 프록시 |
+| [NGINX_GUIDE.md](docs/NGINX_GUIDE.md) | 리버스 프록시, 로드밸런싱, SSL, 보안 헤더 |
+| [MEMORY_LEAK_GUIDE.md](docs/MEMORY_LEAK_GUIDE.md) | 메모리 릭 발생 패턴 8종, 방지 방법 |
+| [AI_CODE_REVIEW_GUIDE.md](docs/AI_CODE_REVIEW_GUIDE.md) | GitHub PR AI 코드 리뷰 자동화 (Gemini) |
 
 ## 프로젝트 구조
 
 ```
+docs/
+├── AI_CODE_REVIEW_GUIDE.md     ← AI 코드 리뷰 자동화 가이드
+├── BATCH_GUIDE.md              ← 배치 처리 상세 가이드
+├── CIRCUIT_BREAKER_GUIDE.md    ← Circuit Breaker 상세 가이드
+├── MEMORY_LEAK_GUIDE.md        ← 메모리 릭 상세 가이드
+├── NGINX_GUIDE.md              ← Nginx 설정 상세 가이드
+├── REDIS_CACHE_GUIDE.md        ← Redis 캐시 상세 가이드
+└── WEBSOCKET_GUIDE.md          ← WebSocket 상세 가이드
+
 infra/nginx/
 ├── nginx-reference.conf        ← 리버스 프록시, 정적 파일, Gzip, 타임아웃
 ├── upstream-loadbalancing.conf  ← upstream, 로드밸런싱 전략 5종, 헬스체크
