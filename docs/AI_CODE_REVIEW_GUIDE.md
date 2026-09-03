@@ -2,6 +2,12 @@
 
 > PR 생성 시 Google Gemini 무료 API를 호출하여 코드 리뷰 코멘트를 자동으로 작성하는 프로세스
 
+### 관련 소스 코드
+
+| # | 파일 | 설명 |
+|---|------|------|
+| 1 | [ai-code-review.yml](../.github/workflows/ai-code-review.yml) | GitHub Actions 워크플로우 — diff 추출 → Gemini API → PR 코멘트 자동 게시 |
+
 ---
 
 ## 전체 동작 흐름

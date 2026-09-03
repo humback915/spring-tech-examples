@@ -2,7 +2,17 @@
 
 > 인메모리 키-값 데이터 스토어. 캐시, 재고 관리, 분산 락 등에 활용.
 
-코드 예제: `src/main/java/kr/co/example/redis/`, `src/main/java/kr/co/example/cache/`
+### 관련 소스 코드 (추천 순서)
+
+| # | 파일 | 설명 |
+|---|------|------|
+| 1 | [RedisConfig.java](../src/main/java/kr/co/example/redis/RedisConfig.java) | Lettuce, StringRedisTemplate, Redisson 설정 — 먼저 인프라 설정을 이해 |
+| 2 | [RedisStockService.java](../src/main/java/kr/co/example/redis/RedisStockService.java) | Hash 재고, @Cacheable, 분산 락 — 기본 CRUD와 캐싱 |
+| 3 | [RedisDataStructureService.java](../src/main/java/kr/co/example/redis/RedisDataStructureService.java) | String/Hash/Set 활용, Lua Script, ZPOPMIN+INCRBY — 자료구조별 활용 |
+| 4 | [RedisCacheStrategyService.java](../src/main/java/kr/co/example/redis/RedisCacheStrategyService.java) | 캐시 전략 5종 (Cache-Aside, Write-Through 등) — 전략 패턴 비교 |
+| 5 | [ProbabilisticEarlyRecomputationService.java](../src/main/java/kr/co/example/redis/ProbabilisticEarlyRecomputationService.java) | PER 알고리즘, DB 폴백, Redis Circuit Breaker — 고급 캐시 기법 |
+| 6 | [LocalCacheConfig.java](../src/main/java/kr/co/example/cache/LocalCacheConfig.java) | Caffeine CacheManager, 퇴거 정책 — 로컬 캐시 설정 |
+| 7 | [LocalCacheService.java](../src/main/java/kr/co/example/cache/LocalCacheService.java) | Manual/Loading/@Cacheable, 멀티 레벨, 워밍 — 로컬+Redis 조합 |
 
 ---
 

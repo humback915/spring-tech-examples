@@ -3,7 +3,11 @@
 > 더 이상 사용하지 않는 객체가 GC에 의해 회수되지 못하고 힙 메모리에 계속 남아있는 현상.
 > Java는 GC가 자동으로 메모리를 관리하지만, **참조(Reference)가 남아있으면 GC가 회수할 수 없다.**
 
-코드 예제: `src/main/java/kr/co/example/javacore/MemoryLeakExample.java`
+### 관련 소스 코드
+
+| # | 파일 | 설명 |
+|---|------|------|
+| 1 | [MemoryLeakExample.java](../src/main/java/kr/co/example/javacore/MemoryLeakExample.java) | 메모리 릭 발생 패턴 8종, 방지 방법 — 파일 하나에 패턴별 Bad/Good 코드 포함 |
 
 ---
 

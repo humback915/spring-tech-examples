@@ -2,7 +2,11 @@
 
 > 외부 서비스 호출 실패가 반복될 때 추가 호출을 차단하여 연쇄 장애를 방지하는 패턴.
 
-코드 예제: `src/main/java/kr/co/example/circuitbreaker/SimpleCircuitBreaker.java`
+### 관련 소스 코드
+
+| # | 파일 | 설명 |
+|---|------|------|
+| 1 | [SimpleCircuitBreaker.java](../src/main/java/kr/co/example/circuitbreaker/SimpleCircuitBreaker.java) | 상태 전이 수동 구현 (CLOSED → OPEN → HALF_OPEN) — 파일 하나에 전체 로직 포함 |
 
 ---
 

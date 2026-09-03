@@ -2,7 +2,13 @@
 
 > 클라이언트-서버 간 양방향 실시간 통신. STOMP 프로토콜로 Pub/Sub 메시징 제공.
 
-코드 예제: `src/main/java/kr/co/example/websocket/`, `infra/nginx/websocket-proxy.conf`
+### 관련 소스 코드 (추천 순서)
+
+| # | 파일 | 설명 |
+|---|------|------|
+| 1 | [WebSocketConfig.java](../src/main/java/kr/co/example/websocket/WebSocketConfig.java) | STOMP, SockJS 설정 — 엔드포인트와 브로커 구성을 먼저 이해 |
+| 2 | [NotificationController.java](../src/main/java/kr/co/example/websocket/NotificationController.java) | @MessageMapping, 서버 Push — 메시지 송수신 핸들러 |
+| 3 | [websocket-proxy.conf](../infra/nginx/websocket-proxy.conf) | Nginx WebSocket Upgrade, STOMP 프록시 — 배포 시 프록시 설정 |
 
 ---
 

@@ -2,7 +2,15 @@
 
 > 대용량 데이터를 안정적으로 처리하기 위한 배치 기법 모음.
 
-코드 예제: `src/main/java/kr/co/example/batch/`
+### 관련 소스 코드 (추천 순서)
+
+| # | 파일 | 설명 |
+|---|------|------|
+| 1 | [SpringBatchConfig.java](../src/main/java/kr/co/example/batch/SpringBatchConfig.java) | Job/Step/Chunk/Tasklet 설정 — Spring Batch 프레임워크 기본 구조 |
+| 2 | [JdbcBatchService.java](../src/main/java/kr/co/example/batch/JdbcBatchService.java) | batchUpdate, 청크 분할, UPSERT — JPA 대비 10배+ 빠른 배치 |
+| 3 | [LockBasedBatchService.java](../src/main/java/kr/co/example/batch/LockBasedBatchService.java) | AtomicBoolean, MySQL GET_LOCK, Redisson — 중복 실행 방지 |
+| 4 | [VersionedBatchService.java](../src/main/java/kr/co/example/batch/VersionedBatchService.java) | 낙관적/비관적 락, CAS 상태 전이 — 동시성 제어 |
+| 5 | [PerformanceAwareBatchService.java](../src/main/java/kr/co/example/batch/PerformanceAwareBatchService.java) | 페이징, 병렬, 스트리밍, 메모리 모니터링 — 성능 최적화 |
 
 ---
 

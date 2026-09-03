@@ -2,7 +2,15 @@
 
 > Spring Boot 앱 앞단의 Nginx 인프라 설정 레퍼런스.
 
-설정 파일: `infra/nginx/`
+### 관련 소스 코드 (추천 순서)
+
+| # | 파일 | 설명 |
+|---|------|------|
+| 1 | [nginx-reference.conf](../infra/nginx/nginx-reference.conf) | 리버스 프록시, 정적 파일, Gzip, 타임아웃 — Nginx 기본 구조와 블록 이해 |
+| 2 | [upstream-loadbalancing.conf](../infra/nginx/upstream-loadbalancing.conf) | upstream, 로드밸런싱 전략 5종, 헬스체크 — 다중 인스턴스 분산 |
+| 3 | [ssl-termination.conf](../infra/nginx/ssl-termination.conf) | SSL/TLS 종료, 인증서, HSTS — HTTPS 설정 |
+| 4 | [security-headers.conf](../infra/nginx/security-headers.conf) | 보안 헤더, CORS, Rate Limiting, IP 제한 — 보안 강화 |
+| 5 | [websocket-proxy.conf](../infra/nginx/websocket-proxy.conf) | WebSocket Upgrade, STOMP 프록시 — 실시간 통신 프록시 |
 
 ---
 
